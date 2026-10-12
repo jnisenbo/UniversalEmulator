@@ -155,13 +155,17 @@ compiles and smoke-tests the Swift helper, runs the live install tests, and pack
 
 ## Status
 
-**Verified in CI:**
-- TypeScript build and unit tests.
-- The Swift helper compiles on macOS 14 / Apple Silicon and answers commands.
-- The app packages and signs.
-- (Live emulator installs — see the CI log.)
+**Verified in CI on Apple Silicon (macOS 14):**
+- TypeScript build and 43 unit tests.
+- The Swift helper compiles, runs and answers commands.
+- `Arcadia.app` packages and passes `codesign --verify --deep --strict`.
+- **Dolphin** (2609a) and **xemu** (0.8.136) install end to end through Arcadia's
+  installer: download, checksum, unpack, signature check, install. Gatekeeper
+  reports both as *Notarized Developer ID*.
+- **Ryubing**: install from its Forgejo releases (being verified; see the latest CI
+  log, "Live emulator sources and installs").
 
-**Needs your hands on a real Mac:**
+**Needs your hands on a real Mac** (see [TESTING.md](TESTING.md)):
 - Pairing and the Home-button menu with a real DualSense.
 - Dolphin's SDL device name for the controller (editable in Settings → Controller).
 - Each emulator actually honouring the written config keys.
