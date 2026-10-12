@@ -27,11 +27,14 @@ export function OverlayApp() {
   const [focus, setFocus] = useState(0);
   const [armedQuit, setArmedQuit] = useState(false);
   const [now, setNow] = useState(Date.now());
+  // The window exists hidden between uses; it must not act on input then.
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.add('overlay');
     const offInput = api.on('overlay:input', ({ action }) => injectAction(action));
     const offOpen = api.on('overlay:opened', () => {
+      setOpen(true);
       setFocus(0);
       setArmedQuit(false);
       setNow(Date.now());
@@ -45,6 +48,7 @@ export function OverlayApp() {
 
   const resume = useCallback(() => {
     play('back');
+    setOpen(false);
     void api.invoke('overlay:resume');
   }, []);
 
@@ -55,6 +59,7 @@ export function OverlayApp() {
       return;
     }
     play('confirm');
+    setOpen(false);
     void api.invoke('overlay:quitGame');
   }, [armedQuit]);
 
@@ -64,6 +69,7 @@ export function OverlayApp() {
   ];
 
   useInputHandler((e: InputEvent) => {
+    if (!open) return true;
     if (e.action === 'back' && e.kind === 'press') resume();
     else if ((e.action === 'up' || e.action === 'down' || e.action === 'left' || e.action === 'right') && e.kind === 'press') {
       setFocus((f) => (f + 1) % actions.length);

@@ -159,6 +159,28 @@ function closeOverlay(): void {
   helper.send({ cmd: 'watch', enabled: session.current.kind === 'running', mode: 'game' });
 }
 
+/** Close the menu and hand focus back to the emulator. */
+async function resumeGame(): Promise<void> {
+  closeOverlay();
+  const current = session.current;
+  if (current.kind === 'running') await activateApp(getAdapter(current.emulator).installPath(settings.get()));
+}
+
+/**
+ * Hide the launcher while a game runs. Activating Arcadia for the in-game menu
+ * would otherwise raise this window over the game (macOS brings all of an
+ * app's windows forward). The delay lets the launch transition finish.
+ */
+let hideTimer: NodeJS.Timeout | null = null;
+function hideLauncherDuringGame(running: boolean): void {
+  if (hideTimer) clearTimeout(hideTimer);
+  hideTimer = null;
+  if (!running || !win || process.env.ARCADIA_KEEP_VISIBLE) return;
+  hideTimer = setTimeout(() => {
+    if (session.current.kind === 'running' && win && !win.isDestroyed()) win.hide();
+  }, 2000);
+}
+
 const MENU_ACTIONS: Record<MenuButton, IpcEvents['overlay:input']['action']> = {
   up: 'up',
   down: 'down',
@@ -210,6 +232,7 @@ function wire(): void {
     // Watch the controller system-wide only while a game is running.
     helper.send({ cmd: 'watch', enabled: state.kind === 'running', mode: 'game' });
     setQuitShortcut(settings.get().quitShortcut, state.kind === 'running');
+    hideLauncherDuringGame(state.kind === 'running');
     if (state.kind === 'ended') {
       overlay.close();
       if (win) void restoreFocus(win);
@@ -217,7 +240,7 @@ function wire(): void {
   });
   helper.on('status', (s) => send('controller:status', s));
   helper.on('pair', (p) => send('controller:pair', p));
-  helper.on('home', () => (overlay.isOpen ? closeOverlay() : openOverlay()));
+  helper.on('home', () => (overlay.isOpen ? void resumeGame() : openOverlay()));
   helper.on('button', (b) => {
     if (overlay.isOpen) send('overlay:input', { action: MENU_ACTIONS[b] });
   });
@@ -366,11 +389,7 @@ function wire(): void {
         if (!client) throw new Error('Add your SteamGridDB API key in Settings → Artwork.');
         return client.search(term || findGame(gameId).displayTitle);
       },
-      'overlay:resume': async () => {
-        closeOverlay();
-        const current = session.current;
-        if (current.kind === 'running') await activateApp(getAdapter(current.emulator).installPath(settings.get()));
-      },
+      'overlay:resume': () => resumeGame(),
       'overlay:quitGame': () => {
         closeOverlay();
         session.quit();
