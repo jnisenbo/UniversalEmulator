@@ -19,6 +19,8 @@ import { Installer, type StreamFetch } from './install/installer';
 import type { JsonFetch } from './install/resolve';
 import { registerHandlers } from './ipc/register';
 import { LibraryCache } from './library/cache';
+import { PlayHistory } from './library/history';
+import { gameKey } from '@shared/library';
 import { loadHeaderKey } from './library/probes/switch-keys';
 import { scanLibrary, sortGames } from './library/scanner';
 import { candidateAppDirs } from './platform/macos/bundle';
@@ -45,6 +47,7 @@ const userData = app.getPath('userData');
 const settings = new SettingsStore(userData);
 const cache = new LibraryCache(userData);
 const art = new ArtStore(userData);
+const history = new PlayHistory(userData);
 const session = new SessionManager();
 const overlay = new OverlayWindow(appRoot);
 const helper = new HelperClient(HelperClient.defaultPath(app.isPackaged, appRoot));
@@ -234,6 +237,10 @@ function wire(): void {
     setQuitShortcut(settings.get().quitShortcut, state.kind === 'running');
     hideLauncherDuringGame(state.kind === 'running');
     if (state.kind === 'ended') {
+      const game = games.find((g) => g.id === state.gameId);
+      if (game) {
+        void history.record(game, state.playedMs).then((record) => record && send('history:updated', { key: gameKey(game), record }));
+      }
       overlay.close();
       if (win) void restoreFocus(win);
     }
@@ -347,7 +354,9 @@ function wire(): void {
         const game = games.find((g) => g.id === gameId);
         // Only paths that came from our own scan can be launched.
         if (!game) return { ok: false, error: 'That game is no longer in the library. Rescan and try again.', warnings: [] };
-        const s = settings.get();
+        const base = settings.get();
+        // Per-game graphics override the global ones for this launch only.
+        const s = { ...base, graphics: { ...base.graphics, ...base.gameGraphics[gameKey(game)] } };
         const ctx = adapterContext(game.emulator, s);
         await mkdir(ctx.managedDir, { recursive: true });
         overlay.prepare();
@@ -385,6 +394,7 @@ function wire(): void {
         const url = SETTINGS_PANES[z.enum(['bluetooth', 'gameControllers', 'privacy']).parse(pane)];
         if (isMac) await shell.openExternal(url);
       },
+      'history:all': () => history.all(),
       'art:all': () => {
         const out: Record<string, GameArt> = {};
         for (const g of games) {
@@ -429,7 +439,7 @@ app.whenReady().then(async () => {
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response(null, { status: 404 });
   });
   await settings.load();
-  await Promise.all([cache.load(), art.load(), installer.load()]);
+  await Promise.all([cache.load(), art.load(), installer.load(), history.load()]);
   games = sortGames(cache.games());
   wire();
   helper.start();

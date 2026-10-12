@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Settings, SettingsPatch } from '@shared/settings';
 import type { EmulatorId } from '@shared/platforms';
-import type { ControllerStatus, EmulatorStatus, Game, GameArt, InstallInfo, InstallProgress, ScanProgress, SessionState } from '@shared/types';
+import type { ControllerStatus, EmulatorStatus, Game, GameArt, InstallInfo, InstallProgress, PlayRecord, ScanProgress, SessionState } from '@shared/types';
 import { api } from '../api';
 import { setButtonLayout, setInputEnabled } from '../input/input';
 import { configureSfx } from '../sound/sfx';
@@ -29,6 +29,8 @@ interface State {
   controller: ControllerStatus;
   toasts: Toast[];
   art: Record<string, GameArt>;
+  /** Play history keyed by gameKey(). */
+  history: Record<string, PlayRecord>;
   installs: InstallInfo[];
   installProgress: Partial<Record<EmulatorId, InstallProgress>>;
 
@@ -65,6 +67,7 @@ export const useStore = create<State>((set, get) => ({
   controller: { helper: 'unavailable', controllers: [] },
   toasts: [],
   art: {},
+  history: {},
   installs: [],
   installProgress: {},
 
@@ -123,15 +126,16 @@ export const useStore = create<State>((set, get) => ({
 
 /** Load initial state and subscribe to main-process events. */
 export async function bootstrap(opts: { overlay?: boolean } = {}): Promise<void> {
-  const [settings, games, session, controller, art] = await Promise.all([
+  const [settings, games, session, controller, art, history] = await Promise.all([
     api.invoke('settings:get'),
     api.invoke('library:list'),
     api.invoke('session:get'),
     api.invoke('controller:status'),
     api.invoke('art:all'),
+    api.invoke('history:all'),
   ]);
   applySettings(settings);
-  useStore.setState({ settings, games, session, controller, art, focusedGameId: games[0]?.id ?? null, ready: true });
+  useStore.setState({ settings, games, session, controller, art, history, focusedGameId: null, ready: true });
   void useStore.getState().refreshInstalls(false);
   void useStore.getState().refreshEmulators();
 
@@ -159,5 +163,6 @@ export async function bootstrap(opts: { overlay?: boolean } = {}): Promise<void>
     else delete next[gameId];
     useStore.setState({ art: next });
   });
+  api.on('history:updated', ({ key, record }) => useStore.setState({ history: { ...useStore.getState().history, [key]: record } }));
   api.on('emulators:installProgress', (p) => useStore.setState({ installProgress: { ...useStore.getState().installProgress, [p.id]: p } }));
 }

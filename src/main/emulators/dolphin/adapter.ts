@@ -1,5 +1,6 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Game } from '@shared/types';
 import type { EmulatorAdapter } from '../adapter';
 import { detectApp } from '../status';
 import { ensureSymlink, exists, writeFileAtomic } from '../../util/fsx';
@@ -8,6 +9,8 @@ import { applyDolphinIni, applyGfxIni, gcPadIni, wiimoteIni } from './config';
 
 /** Folders shared with the user's normal Dolphin setup so saves stay in one place. */
 const SHARED_DIRS = ['GC', 'Wii', 'StateSaves', 'Load', 'ScreenShots'];
+
+const playlistPath = (game: Game, managedDir: string): string => join(managedDir, 'Playlists', `${game.gameId ?? game.id}.m3u`);
 
 const defaultDataDir = (home: string): string => join(home, 'Library', 'Application Support', 'Dolphin');
 
@@ -54,11 +57,18 @@ export const dolphinAdapter: EmulatorAdapter = {
     return { warnings };
   },
 
+  /** Multi-disc games boot from an .m3u so Dolphin can change discs when the game asks. */
+  async prepareGame(game, ctx) {
+    if (!game.discPaths) return;
+    await writeFileAtomic(playlistPath(game, ctx.managedDir), game.discPaths.join('\n') + '\n');
+  },
+
   getLaunchArgs(game, app, ctx) {
+    const boot = game.discPaths ? playlistPath(game, ctx.managedDir) : game.path;
     return {
       executable: app.executable,
       // -b: batch mode, Dolphin exits when emulation stops → control returns to Arcadia.
-      args: ['-u', ctx.managedDir, '-b', '-e', game.path, '-C', 'Dolphin.Display.Fullscreen=True'],
+      args: ['-u', ctx.managedDir, '-b', '-e', boot, '-C', 'Dolphin.Display.Fullscreen=True'],
     };
   },
 };

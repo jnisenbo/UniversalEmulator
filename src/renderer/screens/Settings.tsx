@@ -270,6 +270,14 @@ export function Settings() {
         ];
       case 'interface':
         return [
+          {
+            kind: 'choice',
+            id: 'sort',
+            label: 'Sort library by',
+            options: [{ label: 'Recently played' }, { label: 'Title' }],
+            index: settings.ui.sort === 'title' ? 1 : 0,
+            onChange: (i) => void updateSettings({ ui: { sort: i === 1 ? 'title' : 'recent' } }),
+          },
           { kind: 'toggle', id: 'sounds', label: 'Interface sounds', value: settings.ui.sounds, onChange: (v) => void updateSettings({ ui: { sounds: v } }) },
           { kind: 'slider', id: 'volume', label: 'Sound volume', value: settings.ui.volume, min: 0, max: 1, step: 0.1, format: pct, onChange: (v) => void updateSettings({ ui: { volume: v } }) },
           { kind: 'toggle', id: 'drift', label: 'Background motion', detail: 'Slow drift on the background art. Off by default.', value: settings.ui.backgroundDrift, onChange: (v) => void updateSettings({ ui: { backgroundDrift: v } }) },

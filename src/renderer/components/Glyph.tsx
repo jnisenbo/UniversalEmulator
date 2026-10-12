@@ -35,6 +35,15 @@ export function ShoulderGlyph({ side }: { side: 'L' | 'R' }) {
   );
 }
 
+/** Triggers: a taller key shape, so they read differently from L/R shoulders. */
+export function TriggerGlyph({ side }: { side: 'L' | 'R' }) {
+  return (
+    <span className="glyph glyph-trigger" aria-hidden>
+      {side}T
+    </span>
+  );
+}
+
 /** The small menu button (three short bars), drawn generically. */
 export function MenuGlyph({ size = '1.3em' }: { size?: string }) {
   return (

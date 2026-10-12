@@ -45,6 +45,17 @@ export interface Game extends GameIdentity {
   displayTitle: string;
   sizeBytes: number;
   emulator: EmulatorId;
+  /**
+   * Multi-disc games are one entry: every disc's path in disc order (this
+   * entry's own path is disc 1). Absent for single-disc games.
+   */
+  discPaths?: string[];
+}
+
+export interface PlayRecord {
+  lastPlayed: number;
+  totalMs: number;
+  sessions: number;
 }
 
 export interface ScanProgress {

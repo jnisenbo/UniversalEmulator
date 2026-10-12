@@ -40,6 +40,8 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
   const focused = useRef(focusedIndex);
   const activeRef = useRef(active);
   const remPx = useRef(16);
+  const gamesRef = useRef(games);
+  gamesRef.current = games;
 
   // One "grow" spring per tile: 0 = resting, 1 = focused.
   if (grow.current.length !== games.length) {
@@ -81,6 +83,7 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
 
     const tilePx = (): number => TILE_REM * remPx.current;
     let lastKey = '';
+    let lastGames: unknown = null;
     const stop = onFrame('animate', (dt) => {
       const s = scroll.current;
       s.step(dt);
@@ -92,7 +95,10 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
         g.step(dt);
         key += `|${g.value.toFixed(3)}`;
       }
-      if (key === lastKey) return;
+      // A new list (filter, re-sort, rescan) needs every tile placed again even if
+      // no spring moved; the tile elements behind each index have changed.
+      if (key === lastKey && gamesRef.current === lastGames) return;
+      lastGames = gamesRef.current;
       lastKey = key;
       // Tiles before the focused one are offset by their own growth only, so the
       // focused tile stays anchored at the left and neighbours make room.

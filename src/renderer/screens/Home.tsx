@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EMULATOR_LABEL, PLATFORM_INFO } from '@shared/platforms';
+import { EMULATOR_LABEL, PLATFORM_INFO, PLATFORMS } from '@shared/platforms';
 import { api } from '../api';
 import { placeholderArt } from '../art/placeholder';
 import { gameName } from '../art/name';
@@ -13,6 +13,9 @@ import { GameRow, type GameRowHandle } from '../components/GameRow';
 import { HeroBackground } from '../components/HeroBackground';
 import { LaunchOverlay, type LaunchOrigin } from '../components/LaunchOverlay';
 import { TopBar } from '../components/TopBar';
+import { GameGraphics } from '../components/GameGraphics';
+import { TriggerGlyph } from '../components/Glyph';
+import { arrangeLibrary, formatLastPlayed, formatPlayTime, gameKey, type LibraryFilter } from '@shared/library';
 import { ActionMenu, type MenuItem } from '../components/ActionMenu';
 import { SetupChecklist, useSetupSteps } from '../components/SetupChecklist';
 import type { ArtSearchResult } from '@shared/types';
@@ -28,7 +31,8 @@ function formatSize(bytes: number): string {
 }
 
 export function Home() {
-  const games = useStore((s) => s.games);
+  const allGames = useStore((s) => s.games);
+  const history = useStore((s) => s.history);
   const focusedGameId = useStore((s) => s.focusedGameId);
   const setFocusedGame = useStore((s) => s.setFocusedGame);
   const session = useStore((s) => s.session);
@@ -37,11 +41,17 @@ export function Home() {
   const toast = useStore((s) => s.toast);
   const setScreen = useStore((s) => s.setScreen);
   const artMap = useStore((s) => s.art);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const sort = settings?.ui.sort ?? 'recent';
+  const filter = settings?.ui.filter ?? 'all';
+  // What the row shows: recently played first, narrowed to one console if filtered.
+  const games = useMemo(() => arrangeLibrary(allGames, history, sort, filter), [allGames, history, sort, filter]);
+  const filters = useMemo<LibraryFilter[]>(() => ['all', ...PLATFORMS.filter((p) => allGames.some((g) => g.platform === p))], [allGames]);
 
   const [zone, setZone] = useState<Zone>('row');
   const [pressed, setPressed] = useState(false);
   const [origin, setOrigin] = useState<LaunchOrigin | null>(null);
-  const [menu, setMenu] = useState<null | { kind: 'options' } | { kind: 'art'; results: ArtSearchResult[] | null; error?: string }>(null);
+  const [menu, setMenu] = useState<null | { kind: 'options' } | { kind: 'graphics' } | { kind: 'art'; results: ArtSearchResult[] | null; error?: string }>(null);
   const [setupIndex, setSetupIndex] = useState(0);
   const steps = useSetupSteps();
   const openSettings = useStore((s) => s.openSettings);
@@ -92,10 +102,10 @@ export function Home() {
         if (zone === 'tabs') {
           play('tab');
           setScreen('settings');
-        } else if (games.length === 0) {
+        } else if (allGames.length === 0) {
           play('confirm');
           openSettings(steps[setupIndex]?.id ?? 'emulators');
-        } else if (zone === 'row' || zone === 'play') {
+        } else if ((zone === 'row' || zone === 'play') && games.length > 0) {
           play('confirm');
           void launch(index);
         }
@@ -128,6 +138,18 @@ export function Home() {
           focusIndex(next);
           return true;
         }
+        case 'filterPrev':
+        case 'filterNext': {
+          if (e.kind !== 'press' || filters.length < 2) return true;
+          const at = Math.max(0, filters.indexOf(filter));
+          const next = filters[(at + (e.action === 'filterNext' ? 1 : -1) + filters.length) % filters.length]!;
+          play('tab');
+          setZone('row');
+          void updateSettings({ ui: { filter: next } });
+          // Start the filtered row at its first (most recently played) game.
+          setFocusedGame(arrangeLibrary(allGames, history, sort, next)[0]?.id ?? null);
+          return true;
+        }
         case 'menu':
           if (e.kind === 'press' && game) {
             play('confirm');
@@ -135,7 +157,7 @@ export function Home() {
           }
           return true;
         case 'up':
-          if (games.length === 0 && zone === 'row' && setupIndex > 0) {
+          if (allGames.length === 0 && zone === 'row' && setupIndex > 0) {
             setSetupIndex(setupIndex - 1);
             play('move');
             return true;
@@ -146,7 +168,7 @@ export function Home() {
           play('move');
           return true;
         case 'down':
-          if (games.length === 0 && zone === 'row') {
+          if (allGames.length === 0 && zone === 'row') {
             if (setupIndex < steps.length - 1) {
               setSetupIndex(setupIndex + 1);
               play('move');
@@ -168,7 +190,7 @@ export function Home() {
           return false; // tabs (L/R) handled by App
       }
     },
-    [zone, games.length, index, game, focusIndex, launch, setScreen, openSettings, steps, setupIndex],
+    [zone, games.length, allGames, history, sort, filter, filters, index, game, focusIndex, launch, setScreen, openSettings, steps, setupIndex, updateSettings, setFocusedGame],
   );
 
   useInputHandler(handle);
@@ -184,6 +206,7 @@ export function Home() {
   }, [session.kind]);
 
   const info = game ? PLATFORM_INFO[game.platform] : null;
+  const played = game ? history[gameKey(game)] : undefined;
 
   function gameMenu(): MenuItem[] {
     if (!game) return [];
@@ -204,7 +227,12 @@ export function Home() {
         },
       },
       { label: 'Refresh artwork', disabled: !hasKey, run: () => void api.invoke('art:refresh', { gameId: game.id }).catch(artError) },
-      { label: 'Show in Finder', detail: game.path, run: () => void api.invoke('game:reveal', { gameId: game.id }) },
+      {
+        label: 'Graphics for this game…',
+        detail: settings?.gameGraphics[gameKey(game)] ? 'Custom settings' : 'Uses your default graphics settings',
+        run: () => setMenu({ kind: 'graphics' }),
+      },
+      { label: 'Show in Finder', detail: game.discPaths ? `${game.discPaths.length} discs · ${game.path}` : game.path, run: () => void api.invoke('game:reveal', { gameId: game.id }) },
     ];
   }
 
@@ -212,6 +240,18 @@ export function Home() {
     <div className="screen home">
       <HeroBackground artKey={`${game?.id ?? 'empty'}-${gameArt?.hero ?? ''}`} background={heroBackground} drift={!!settings?.ui.backgroundDrift} />
       <TopBar focusedTab={zone === 'tabs' ? 'settings' : null} />
+
+      {filters.length > 1 && (
+        <div className="filters" aria-label="Filter by console">
+          <TriggerGlyph side="L" />
+          {filters.map((f) => (
+            <span key={f} className="filter" data-active={f === filter}>
+              {f === 'all' ? 'All' : PLATFORM_INFO[f].label}
+            </span>
+          ))}
+          <TriggerGlyph side="R" />
+        </div>
+      )}
 
       {games.length > 0 ? (
         <GameRow ref={row} games={games} art={artMap} focusedIndex={index} active={zone === 'row'} onHover={() => setZone('row')} onActivate={(i) => (i === index ? void launch(i) : focusIndex(i))} />
@@ -236,11 +276,29 @@ export function Home() {
             )}
             {game.note && <p className="hero-note">{game.note}</p>}
             <div className="hero-meta">
-              {[game.gameId, game.format.toUpperCase(), formatSize(game.sizeBytes), EMULATOR_LABEL[game.emulator], game.discNumber > 0 ? `Disc ${game.discNumber + 1}` : null].filter(Boolean).join('  ·  ')}
+              {[
+                game.gameId,
+                game.format.toUpperCase(),
+                game.discPaths ? `${game.discPaths.length} discs` : formatSize(game.sizeBytes),
+                EMULATOR_LABEL[game.emulator],
+                game.discNumber > 0 && !game.discPaths ? `Disc ${game.discNumber + 1}` : null,
+              ]
+                .filter(Boolean)
+                .join('  ·  ')}
             </div>
+            {played && (
+              <div className="hero-played">
+                Played {formatPlayTime(played.totalMs)} · last played {formatLastPlayed(played.lastPlayed)}
+              </div>
+            )}
             <button className="play" data-focused={zone === 'play'} data-pressed={pressed && zone === 'play'} onClick={() => void launch(index)}>
               Play
             </button>
+          </>
+        ) : allGames.length > 0 ? (
+          <>
+            <h1 className="hero-title">No {filter === 'all' ? '' : PLATFORM_INFO[filter].label} games</h1>
+            <p className="hero-meta">Use the L and R triggers to choose another console.</p>
           </>
         ) : (
           <>
@@ -257,12 +315,14 @@ export function Home() {
         hints={[
           { button: 'south', label: zone === 'tabs' ? 'Open' : games.length ? 'Play' : 'Set up' },
           ...(games.length && zone !== 'tabs' ? [{ button: 'menu' as const, label: 'Options' }] : []),
+          ...(filters.length > 1 ? [{ button: 'RT' as const, label: 'Filter' }] : []),
           ...(zone !== 'row' ? [{ button: 'east' as const, label: 'Back' }] : []),
           { button: 'R', label: 'Settings' },
         ]}
       />
 
       <LaunchOverlay origin={origin} session={session} onClosed={() => setOrigin(null)} />
+      {menu?.kind === 'graphics' && game && <GameGraphics game={game} title={gameName(game, gameArt)} onClose={() => setMenu(null)} />}
       {menu?.kind === 'options' && game && <ActionMenu title={gameName(game, gameArt)} items={gameMenu()} onClose={() => setMenu(null)} />}
       {menu?.kind === 'art' && game && (
         <ActionMenu

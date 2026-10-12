@@ -36,5 +36,7 @@ export interface EmulatorAdapter {
   detect(ctx: AdapterContext): Promise<EmulatorStatus>;
   /** Writes Arcadia's managed config. Fatal problems throw with a user-facing message. */
   writeConfig(ctx: AdapterContext, profile: ControllerProfile): Promise<ConfigResult>;
+  /** Optional per-game preparation before launch (e.g. a disc playlist). */
+  prepareGame?(game: Game, ctx: AdapterContext): Promise<void>;
   getLaunchArgs(game: Game, app: ResolvedApp, ctx: AdapterContext): LaunchSpec;
 }

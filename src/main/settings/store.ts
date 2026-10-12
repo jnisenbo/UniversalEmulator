@@ -50,7 +50,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 /** Map-like settings whose keys come and go: a patch replaces them whole. */
-const REPLACE_WHOLE = new Set(['layout']);
+const REPLACE_WHOLE = new Set(['layout', 'gameGraphics']);
 
 /** Deep merge for plain objects; arrays, scalars and REPLACE_WHOLE keys replace. */
 export function mergeOneLevel<T>(base: T, patch: unknown): T {

@@ -5,6 +5,7 @@ import { PLATFORM_INFO } from '@shared/platforms';
 import type { Game, GameIdentity, ScanProgress, ScanSummary } from '@shared/types';
 import type { CacheEntry, LibraryCache } from './cache';
 import { isCandidate, probeFile, type ProbeContext } from './probes/index';
+import { groupDiscs } from './discs';
 import { titleFromPath } from './title';
 
 const MAX_DEPTH = 8;
@@ -117,6 +118,7 @@ export async function scanLibrary(
   };
 }
 
+/** Group multi-disc games, then order by title (the renderer re-orders by play history). */
 export function sortGames(games: Game[]): Game[] {
-  return [...games].sort((a, b) => a.displayTitle.localeCompare(b.displayTitle, undefined, { sensitivity: 'base' }) || a.discNumber - b.discNumber);
+  return groupDiscs(games).sort((a, b) => a.displayTitle.localeCompare(b.displayTitle, undefined, { sensitivity: 'base' }) || a.discNumber - b.discNumber);
 }

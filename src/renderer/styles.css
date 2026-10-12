@@ -365,3 +365,18 @@ html.overlay, html.overlay body, html.overlay #root { background: transparent; }
 .ov-footer .hints { position: static; }
 .ov-battery { color: var(--text-3); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .ov-panel { animation: fade-in 160ms ease both; } }
+.glyph-trigger {
+  font-size: 0.75rem; font-weight: 700; line-height: 1;
+  padding: 0.35rem 0.5rem 0.2rem; border-radius: 0.7rem 0.7rem 0.3rem 0.3rem;
+  border: 1.5px solid var(--text-3); color: var(--text-2);
+}
+
+/* ---------- Console filter + play history ---------- */
+.filters {
+  position: absolute; top: 5.4rem; left: var(--gutter); z-index: 5;
+  display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 650;
+}
+.filter { padding: 0.25rem 0.75rem; border-radius: 999px; color: var(--text-3); transition: background-color 160ms ease-out, color 160ms ease-out; }
+.filter[data-active='true'] { color: #0a0c12; background: var(--text); }
+.home:has(.filters) .row-viewport { top: 8.2rem; }
+.hero-played { margin: -1.4rem 0 1.8rem; font-size: 0.98rem; font-weight: 550; color: var(--text-3); }

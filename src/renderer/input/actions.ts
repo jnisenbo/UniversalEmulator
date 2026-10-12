@@ -1,4 +1,4 @@
-export type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'tabPrev' | 'tabNext' | 'menu';
+export type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'tabPrev' | 'tabNext' | 'menu' | 'filterPrev' | 'filterNext';
 export type InputSource = 'pad' | 'stick' | 'key' | 'pointer';
 
 export interface InputEvent {

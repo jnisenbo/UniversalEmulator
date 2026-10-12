@@ -132,7 +132,8 @@ export function applyDolphinIni(ini: Ini): Ini {
   // Pausing when focus leaves Dolphin means the in-game menu (Home) pauses the game.
   setIni(ini, 'Interface', { ConfirmStop: 'False', PauseOnFocusLost: 'True' });
   setIni(ini, 'Analytics', { PermissionAsked: 'True', Enabled: 'False' });
-  setIni(ini, 'Core', { SIDevice0: '6' }); // 6 = standard GameCube controller
+  // 6 = standard GameCube controller. AutoDiscChange swaps discs from an .m3u when the game asks.
+  setIni(ini, 'Core', { SIDevice0: '6', AutoDiscChange: 'True' });
   setIni(ini, 'BluetoothPassthrough', { Enabled: 'False' });
   return ini;
 }

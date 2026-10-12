@@ -4,6 +4,7 @@ import type {
   GameArt,
   InstallInfo,
   InstallProgress,
+  PlayRecord,
   EmulatorStatus,
   Game,
   LaunchResult,
@@ -39,6 +40,7 @@ export interface IpcRequests {
   'controller:setLight': { req: { r: number; g: number; b: number }; res: void };
   'system:openSettingsPane': { req: 'bluetooth' | 'gameControllers' | 'privacy'; res: void };
   'app:quit': { req: void; res: void };
+  'history:all': { req: void; res: Record<string, PlayRecord> };
   'art:all': { req: void; res: Record<string, GameArt> };
   'art:refresh': { req: { gameId: string; sourceId?: number }; res: GameArt | null };
   'art:search': { req: { gameId: string; term?: string }; res: ArtSearchResult[] };
@@ -58,6 +60,7 @@ export interface IpcEvents {
   'overlay:opened': { gameId: string };
   'art:updated': { gameId: string; art: GameArt | null };
   'emulators:installProgress': InstallProgress;
+  'history:updated': { key: string; record: PlayRecord };
 }
 
 export type RequestChannel = keyof IpcRequests;
@@ -85,6 +88,7 @@ export const REQUEST_CHANNELS = [
   'controller:setLight',
   'system:openSettingsPane',
   'app:quit',
+  'history:all',
   'art:all',
   'art:refresh',
   'art:search',
@@ -102,6 +106,7 @@ export const EVENT_CHANNELS = [
   'overlay:opened',
   'art:updated',
   'emulators:installProgress',
+  'history:updated',
 ] as const satisfies readonly EventChannel[];
 
 export interface ArcadiaApi {

@@ -15,6 +15,8 @@ const SLOT_ACTIONS: [PadButton, Action][] = [
   ['l1', 'tabPrev'],
   ['r1', 'tabNext'],
   ['options', 'menu'],
+  ['l2', 'filterPrev'],
+  ['r2', 'filterNext'],
   ['up', 'up'],
   ['down', 'down'],
   ['left', 'left'],
@@ -39,6 +41,8 @@ const KEY_ACTIONS: Record<string, Action> = {
   q: 'tabPrev',
   e: 'tabNext',
   m: 'menu',
+  '[': 'filterPrev',
+  ']': 'filterNext',
 };
 
 // Repeat timing: a deliberate first delay, then accelerate the longer you hold.

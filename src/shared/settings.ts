@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PAD_BUTTONS } from './controls';
+import { PLATFORMS } from './platforms';
 
 const rgb = z.object({ r: z.number().int().min(0).max(255), g: z.number().int().min(0).max(255), b: z.number().int().min(0).max(255) });
 
@@ -33,6 +34,14 @@ export const GraphicsSchema = z.object({
 });
 export type Graphics = z.infer<typeof GraphicsSchema>;
 
+/** Per-game override: only the fields set for that game, no defaults filled in. */
+export const GraphicsOverrideSchema = z.object({
+  resolutionScale: z.number().int().min(1).max(4).optional(),
+  vsync: z.boolean().optional(),
+  aspect: z.enum(['auto', '16:9', '4:3', 'stretch']).optional(),
+  showFps: z.boolean().optional(),
+});
+
 export const SettingsSchema = z.object({
   version: z.literal(1).default(1),
   libraryFolders: z.array(z.string()).default([]),
@@ -50,6 +59,8 @@ export const SettingsSchema = z.object({
   switchKeysPath: z.string().nullable().default(null),
   controller: ControllerProfileSchema.prefault({}),
   graphics: GraphicsSchema.prefault({}),
+  /** Per-game graphics overrides, keyed by gameKey(); missing fields use `graphics`. */
+  gameGraphics: z.record(z.string(), GraphicsOverrideSchema).default({}),
   metadata: z
     .object({
       /** Your own SteamGridDB API key (steamgriddb.com → Preferences → API). */
@@ -62,6 +73,8 @@ export const SettingsSchema = z.object({
       sounds: z.boolean().default(true),
       volume: z.number().min(0).max(1).default(0.5),
       backgroundDrift: z.boolean().default(false),
+      sort: z.enum(['recent', 'title']).default('recent'),
+      filter: z.enum(['all', ...PLATFORMS]).default('all'),
     })
     .prefault({}),
   /** Global keyboard shortcut that quits the running game back to Arcadia. */

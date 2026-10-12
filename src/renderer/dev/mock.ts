@@ -119,6 +119,10 @@ export function createMockApi(): ArcadiaApi {
     'emulators:openApp': () => undefined,
     'emulators:openHomepage': () => undefined,
     'art:all': () => ({}),
+    'history:all': () => ({
+      'switch-0100152000022000': { lastPlayed: Date.now() - 3_600_000, totalMs: 12_400_000, sessions: 9 },
+      'wii-rmge01': { lastPlayed: Date.now() - 86_400_000 * 1.2, totalMs: 4_100_000, sessions: 3 },
+    }),
     'art:refresh': () => null,
     'art:search': ({ gameId }) => {
       const g = games.find((x) => x.id === gameId);
