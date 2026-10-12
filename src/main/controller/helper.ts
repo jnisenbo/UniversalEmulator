@@ -6,10 +6,13 @@ import { createInterface } from 'node:readline';
 import type { HelperCommand, HelperEvent } from '@shared/helper-protocol';
 import type { ControllerStatus, PairEvent } from '@shared/types';
 
+export type MenuButton = Extract<HelperEvent, { event: 'button' }>['button'];
+
 interface Events {
   status: [ControllerStatus];
   pair: [PairEvent];
-  quitGesture: [source: 'home' | 'chord'];
+  home: [source: 'home' | 'chord'];
+  button: [MenuButton];
 }
 
 const MAX_RESTARTS = 5;
@@ -17,7 +20,7 @@ const MAX_RESTARTS = 5;
 /**
  * Owns the native Swift helper process. If the helper is missing (not built,
  * or not on macOS) everything degrades: no Bluetooth pairing from Arcadia,
- * no system-wide quit gesture. The UI explains the fallback.
+ * no in-game Home menu from the controller (⌘⇧Esc still quits). The UI explains the fallback.
  */
 export class HelperClient extends EventEmitter<Events> {
   private child: ChildProcess | null = null;
@@ -103,8 +106,11 @@ export class HelperClient extends EventEmitter<Events> {
       case 'pair':
         this.emit('pair', { phase: msg.phase, ...(msg.name ? { name: msg.name } : {}), ...(msg.message ? { message: msg.message } : {}) });
         break;
-      case 'quitGesture':
-        this.emit('quitGesture', msg.source);
+      case 'home':
+        this.emit('home', msg.source);
+        break;
+      case 'button':
+        this.emit('button', msg.button);
         break;
       case 'log':
         console[msg.level === 'error' ? 'error' : 'log'](`[helper] ${msg.message}`);

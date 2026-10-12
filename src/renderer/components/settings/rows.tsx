@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 export type Row =
-  | { kind: 'action'; id: string; label: string; value?: string; detail?: string; danger?: boolean; onConfirm(): void }
+  | { kind: 'action'; id: string; label: string; value?: string; detail?: string; danger?: boolean; progress?: number; onConfirm(): void }
   | { kind: 'toggle'; id: string; label: string; detail?: string; value: boolean; onChange(v: boolean): void }
   | { kind: 'slider'; id: string; label: string; detail?: string; value: number; min: number; max: number; step: number; format(v: number): string; onChange(v: number): void }
   | { kind: 'choice'; id: string; label: string; detail?: string; options: { label: string; swatch?: string }[]; index: number; onChange(i: number): void }
@@ -37,6 +37,11 @@ export function RowView({ row, focused, editing, onEditDone, onPointerConfirm }:
         {row.detail && <div className="srow-detail">{row.detail}</div>}
       </div>
       <div className="srow-control">
+        {row.kind === 'action' && row.progress !== undefined && (
+          <span className="progress">
+            <span style={{ width: `${Math.round(row.progress * 100)}%` }} />
+          </span>
+        )}
         {row.kind === 'action' && <span className="srow-value">{row.value}</span>}
         {row.kind === 'toggle' && <span className="switch" data-on={row.value} />}
         {row.kind === 'slider' && (

@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EMULATOR_LABEL, type EmulatorId } from '@shared/platforms';
-import type { Settings as SettingsT } from '@shared/settings';
-import type { EmulatorStatus } from '@shared/types';
 import { api } from '../api';
 import { useInputHandler } from '../input/useInput';
 import type { InputEvent } from '../input/actions';
 import { play } from '../sound/sfx';
 import { useStore } from '../state/store';
+import { ActionMenu, type MenuItem } from '../components/ActionMenu';
 import { ButtonHints } from '../components/ButtonHints';
 import { TopBar } from '../components/TopBar';
 import { adjustRow, isFocusable, RowView, type Row } from '../components/settings/rows';
 import { PairWizard } from '../components/controller/PairWizard';
 import { Calibration } from '../components/controller/Calibration';
+import { ButtonLayout } from '../components/controller/ButtonLayout';
+import { emulatorRows, isInstalling, shortPath } from './settings/emulators';
 
-type SectionId = 'emulators' | 'library' | 'controller' | 'interface' | 'system';
+type SectionId = 'emulators' | 'library' | 'controller' | 'graphics' | 'artwork' | 'interface' | 'system';
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'emulators', label: 'Emulators' },
   { id: 'library', label: 'Library' },
   { id: 'controller', label: 'Controller' },
+  { id: 'graphics', label: 'Graphics' },
+  { id: 'artwork', label: 'Artwork' },
   { id: 'interface', label: 'Interface' },
   { id: 'system', label: 'System' },
 ];
@@ -33,57 +36,36 @@ const LIGHT_COLORS = [
   { label: 'Off', rgb: { r: 0, g: 0, b: 0 } },
 ];
 
-const pct = (v: number): string => `${Math.round(v * 100)}%`;
-const shortPath = (p: string | null): string => (p ? p.replace(/^\/Users\/[^/]+/, '~') : 'Not set');
+const ASPECTS = ['auto', '16:9', '4:3', 'stretch'] as const;
+const ASPECT_LABEL = { auto: 'Auto', '16:9': '16:9', '4:3': '4:3', stretch: 'Stretch' } as const;
+const RES_LABEL = ['', 'Native', '2×', '3×', '4×'];
 
-function emulatorRows(s: SettingsT, statuses: EmulatorStatus[], pick: (id: EmulatorId) => void, autodetect: () => void, update: ReturnType<typeof useStore.getState>['updateSettings']): Row[] {
-  const rows: Row[] = [{ kind: 'action', id: 'autodetect', label: 'Find installed emulators', detail: 'Looks in /Applications, ~/Applications and ~/Downloads', onConfirm: autodetect }];
-  for (const id of ['dolphin', 'ryubing', 'xenia'] as const) {
-    const st = statuses.find((x) => x.id === id);
-    const path = s.emulators[id].appPath;
-    rows.push({
-      kind: 'action',
-      id: `emu-${id}`,
-      label: EMULATOR_LABEL[id],
-      detail: [shortPath(path), st?.version ? `v${st.version}` : null, st?.arch.length ? st.arch.join('/') : null].filter(Boolean).join(' · '),
-      value: 'Choose…',
-      onConfirm: () => pick(id),
-    });
-    for (const [i, issue] of (st?.issues ?? []).entries()) {
-      rows.push({ kind: 'info', id: `emu-${id}-issue-${i}`, label: issue.message, level: issue.level });
-    }
-    if (id === 'xenia') {
-      rows.push({
-        kind: 'text',
-        id: 'xenia-args',
-        label: 'Xenia launch arguments',
-        detail: '{game} is replaced with the game path',
-        value: s.emulators.xenia.argsTemplate,
-        onCommit: (v) => void update({ emulators: { xenia: { argsTemplate: v || '{game}' } } }),
-      });
-    }
-  }
-  return rows;
-}
+const pct = (v: number): string => `${Math.round(v * 100)}%`;
+
+type ModalState = { kind: 'pair' } | { kind: 'calibrate' } | { kind: 'layout' } | { kind: 'emulator'; id: EmulatorId } | null;
 
 export function Settings() {
   const settings = useStore((s) => s.settings);
   const emulators = useStore((s) => s.emulators);
+  const installs = useStore((s) => s.installs);
+  const installProgress = useStore((s) => s.installProgress);
   const controller = useStore((s) => s.controller);
   const games = useStore((s) => s.games);
   const scan = useStore((s) => s.scan);
-  const { updateSettings, refreshEmulators, rescan, setScreen, toast } = useStore.getState();
+  const { updateSettings, refreshEmulators, refreshInstalls, install, rescan, setScreen, toast } = useStore.getState();
 
-  const [col, setCol] = useState<'nav' | 'panel'>('nav');
-  const [section, setSection] = useState(0);
+  const [col, setCol] = useState<'nav' | 'panel'>(() => (useStore.getState().settingsSection ? 'panel' : 'nav'));
+  const [section, setSection] = useState(() => Math.max(0, SECTIONS.findIndex((s) => s.id === useStore.getState().settingsSection)));
+  useEffect(() => useStore.setState({ settingsSection: null }), []);
   const [rowIndex, setRowIndex] = useState(0);
   const [editing, setEditing] = useState<string | null>(null);
   const [armedRemove, setArmedRemove] = useState<string | null>(null);
-  const [modal, setModal] = useState<'pair' | 'calibrate' | null>(null);
+  const [modal, setModal] = useState<ModalState>(null);
 
   useEffect(() => {
     void refreshEmulators();
-  }, [refreshEmulators]);
+    void refreshInstalls(false);
+  }, [refreshEmulators, refreshInstalls]);
 
   const pickEmulator = useCallback(
     async (id: EmulatorId) => {
@@ -99,7 +81,7 @@ export function Settings() {
     const found = await api.invoke('emulators:autodetect');
     const ids = Object.keys(found) as EmulatorId[];
     if (!ids.length) {
-      toast({ level: 'info', title: 'No emulators found in the usual places', detail: 'Choose each one manually.' });
+      toast({ level: 'info', title: 'No emulators found in the usual places', detail: 'Install them from here, or choose each one manually.' });
       return;
     }
     await updateSettings({ emulators: Object.fromEntries(ids.map((id) => [id, { appPath: found[id] }])) });
@@ -107,12 +89,58 @@ export function Settings() {
     toast({ level: 'info', title: `Found ${ids.map((id) => EMULATOR_LABEL[id]).join(', ')}` });
   }, [updateSettings, refreshEmulators, toast]);
 
+  const installAll = useCallback(async () => {
+    const s = useStore.getState();
+    const missing = s.installs.filter((i) => i.installable && !s.settings?.emulators[i.id].appPath).map((i) => i.id);
+    for (const id of missing) {
+      const ok = await install(id);
+      if (ok) toast({ level: 'info', title: `${EMULATOR_LABEL[id]} installed` });
+    }
+  }, [install, toast]);
+
+  const emulatorMenu = useCallback(
+    (id: EmulatorId): MenuItem[] => {
+      const info = installs.find((i) => i.id === id);
+      const path = settings?.emulators[id].appPath ?? null;
+      const busy = isInstalling(installProgress[id]);
+      const items: MenuItem[] = [];
+      if (info?.installable) {
+        const label = !path ? 'Install latest version' : info.managedVersion ? (info.latestVersion && info.latestVersion !== info.managedVersion ? `Update to ${info.latestVersion}` : 'Reinstall latest version') : 'Install Arcadia’s own copy';
+        items.push({
+          label,
+          detail: 'Official Mac build, checksum-verified, into ~/Applications',
+          disabled: busy,
+          run: () => void install(id).then((ok) => ok && toast({ level: 'info', title: `${EMULATOR_LABEL[id]} is ready` })),
+        });
+      } else {
+        items.push({ label: `Get ${EMULATOR_LABEL[id]} from its website`, detail: 'Experimental: no automatic install yet', run: () => void api.invoke('emulators:openHomepage', { id }) });
+      }
+      if (path) {
+        items.push({ label: `Open ${EMULATOR_LABEL[id]}`, ...(info?.firstRun ? { detail: info.firstRun } : {}), run: () => void api.invoke('emulators:openApp', { id }).catch((e: Error) => toast({ level: 'error', title: e.message })) });
+      }
+      items.push({ label: path ? 'Use a different copy…' : 'Choose an installed copy…', run: () => void pickEmulator(id) });
+      if (info?.installable) items.push({ label: 'Project website', run: () => void api.invoke('emulators:openHomepage', { id }) });
+      return items;
+    },
+    [installs, settings, installProgress, install, pickEmulator, toast],
+  );
+
   const rows: Row[] = useMemo(() => {
     if (!settings) return [];
     const c = settings.controller;
+    const g = settings.graphics;
     switch (SECTIONS[section]!.id) {
       case 'emulators':
-        return emulatorRows(settings, emulators, (id) => void pickEmulator(id), () => void autodetect(), updateSettings);
+        return emulatorRows({
+          settings,
+          statuses: emulators,
+          installs,
+          progress: installProgress,
+          openMenu: (id) => setModal({ kind: 'emulator', id }),
+          installAll: () => void installAll(),
+          checkUpdates: () => void refreshInstalls(true).then(() => toast({ level: 'info', title: 'Checked for updates' })),
+          autodetect: () => void autodetect(),
+        });
       case 'library':
         return [
           ...settings.libraryFolders.map<Row>((f) => ({
@@ -131,7 +159,7 @@ export function Settings() {
             kind: 'action',
             id: 'add-folder',
             label: 'Add a game folder…',
-            detail: 'Subfolders are included. Wii/GameCube (.iso .rvz .wbfs .gcz), Switch (.nsp .xci), Xbox 360 (.iso .xex, XBLA packages)',
+            detail: 'Subfolders are included. Wii/GameCube (.iso .rvz .wbfs .gcz), Switch (.nsp .xci), Xbox (.iso), Xbox 360 (.iso .xex, XBLA packages)',
             onConfirm: async () => {
               const p = await api.invoke('dialog:pick', { kind: 'folder', title: 'Add a game folder' });
               if (p && !settings.libraryFolders.includes(p)) {
@@ -145,7 +173,7 @@ export function Settings() {
             kind: 'action',
             id: 'keys',
             label: 'Switch keys (prod.keys)',
-            detail: `${shortPath(settings.switchKeysPath) === 'Not set' ? "Using Ryubing's keys" : shortPath(settings.switchKeysPath)}. Read in place to identify Switch dumps; never copied or uploaded.`,
+            detail: `${settings.switchKeysPath ? shortPath(settings.switchKeysPath) : "Using Ryubing's keys"}. Read in place to identify Switch dumps; never copied or uploaded.`,
             value: 'Choose…',
             onConfirm: async () => {
               const p = await api.invoke('dialog:pick', { kind: 'file', title: 'Select your prod.keys' });
@@ -159,6 +187,7 @@ export function Settings() {
       case 'controller': {
         const pad = controller.controllers[0];
         const lightIndex = Math.max(0, LIGHT_COLORS.findIndex((l) => l.rgb.r === c.lightBar.r && l.rgb.g === c.lightBar.g && l.rgb.b === c.lightBar.b));
+        const remapped = Object.keys(c.layout).length;
         return [
           {
             kind: 'info',
@@ -167,8 +196,16 @@ export function Settings() {
             ...(controller.helper !== 'running' && controller.helperMessage ? { detail: controller.helperMessage } : {}),
             level: pad ? 'ok' : 'warn',
           },
-          { kind: 'action', id: 'pair', label: 'Pair a wireless controller', detail: 'Connect over Bluetooth, step by step', onConfirm: () => setModal('pair') },
-          { kind: 'action', id: 'calibrate', label: 'Calibrate and test', detail: 'Stick dead zones, trigger threshold, buttons and rumble', onConfirm: () => setModal('calibrate') },
+          { kind: 'action', id: 'pair', label: 'Pair a wireless controller', detail: 'Connect over Bluetooth, step by step', onConfirm: () => setModal({ kind: 'pair' }) },
+          {
+            kind: 'action',
+            id: 'layout',
+            label: 'Button layout',
+            detail: 'Move any button anywhere. Applies to every emulator and to Arcadia.',
+            value: remapped ? `${remapped} changed` : 'Default',
+            onConfirm: () => setModal({ kind: 'layout' }),
+          },
+          { kind: 'action', id: 'calibrate', label: 'Calibrate and test', detail: 'Stick dead zones, trigger threshold, buttons and rumble', onConfirm: () => setModal({ kind: 'calibrate' }) },
           {
             kind: 'choice',
             id: 'light',
@@ -183,7 +220,7 @@ export function Settings() {
             kind: 'action',
             id: 'home-button',
             label: 'Home button',
-            detail: 'If the Home button opens Apple’s Games app, turn that off in System Settings → Game Controllers. Create + Options also works.',
+            detail: 'Opens Arcadia’s menu during a game. If it opens Apple’s Games app instead, turn that off in System Settings → Game Controllers (or hold Create + Options).',
             value: 'Open…',
             onConfirm: () => void api.invoke('system:openSettingsPane', 'gameControllers'),
           },
@@ -197,6 +234,34 @@ export function Settings() {
           },
         ];
       }
+      case 'graphics':
+        return [
+          { kind: 'info', id: 'gfx-note', label: 'Applies to Dolphin, Ryubing and xemu the next time a game starts. Xenia uses its own settings.' },
+          { kind: 'slider', id: 'res', label: 'Internal resolution', detail: 'Multiples of the console’s own resolution. 2× (about 1080p for Wii/GameCube) suits most Apple Silicon Macs; 3–4× on Pro and Max chips.', value: g.resolutionScale, min: 1, max: 4, step: 1, format: (v) => RES_LABEL[v] ?? `${v}×`, onChange: (v) => void updateSettings({ graphics: { resolutionScale: v } }) },
+          { kind: 'toggle', id: 'vsync', label: 'VSync', detail: 'Prevents tearing. Turn off only if a game stutters.', value: g.vsync, onChange: (v) => void updateSettings({ graphics: { vsync: v } }) },
+          {
+            kind: 'choice',
+            id: 'aspect',
+            label: 'Aspect ratio',
+            options: ASPECTS.map((a) => ({ label: ASPECT_LABEL[a] })),
+            index: ASPECTS.indexOf(g.aspect),
+            onChange: (i) => void updateSettings({ graphics: { aspect: ASPECTS[i]! } }),
+          },
+          { kind: 'toggle', id: 'fps', label: 'Show frame rate', detail: 'Dolphin only', value: g.showFps, onChange: (v) => void updateSettings({ graphics: { showFps: v } }) },
+        ];
+      case 'artwork':
+        return [
+          {
+            kind: 'text',
+            id: 'sgdb-key',
+            label: 'SteamGridDB API key',
+            detail: settings.metadata.steamGridDbKey ? 'Saved. Covers, backgrounds and logos download automatically.' : 'Free at steamgriddb.com → Preferences → API. Paste it here with the keyboard.',
+            value: settings.metadata.steamGridDbKey ? '••••••••' + settings.metadata.steamGridDbKey.slice(-4) : 'Not set',
+            onCommit: (v) => void updateSettings({ metadata: { steamGridDbKey: v && !v.startsWith('••') ? v : settings.metadata.steamGridDbKey } }),
+          },
+          { kind: 'toggle', id: 'sgdb-auto', label: 'Download artwork automatically', value: settings.metadata.autoFetch, onChange: (v) => void updateSettings({ metadata: { autoFetch: v } }) },
+          { kind: 'action', id: 'sgdb-now', label: 'Get missing artwork now', detail: 'To fix a wrong match, press Options on a game in the library', onConfirm: () => void rescan() },
+        ];
       case 'interface':
         return [
           { kind: 'toggle', id: 'sounds', label: 'Interface sounds', value: settings.ui.sounds, onChange: (v) => void updateSettings({ ui: { sounds: v } }) },
@@ -207,11 +272,15 @@ export function Settings() {
       case 'system':
         return [{ kind: 'action', id: 'quit', label: 'Quit Arcadia', onConfirm: () => void api.invoke('app:quit') }];
     }
-  }, [settings, section, emulators, controller, games.length, scan, armedRemove, pickEmulator, autodetect, updateSettings, rescan]);
+  }, [settings, section, emulators, installs, installProgress, controller, games.length, scan, armedRemove, autodetect, installAll, updateSettings, refreshInstalls, rescan, toast]);
 
   // Keep the row index on a focusable row when the list changes.
   const focusable = rows.map((r, i) => (isFocusable(r) ? i : -1)).filter((i) => i >= 0);
   const current = focusable.includes(rowIndex) ? rowIndex : (focusable[0] ?? 0);
+
+  useEffect(() => {
+    document.querySelector('.settings-panel .srow[data-focused="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [current, col]);
 
   const handle = useCallback(
     (e: InputEvent): boolean => {
@@ -330,8 +399,10 @@ export function Settings() {
           { button: 'L', label: 'Library' },
         ]}
       />
-      {modal === 'pair' && <PairWizard onClose={() => setModal(null)} />}
-      {modal === 'calibrate' && <Calibration onClose={() => setModal(null)} />}
+      {modal?.kind === 'pair' && <PairWizard onClose={() => setModal(null)} />}
+      {modal?.kind === 'calibrate' && <Calibration onClose={() => setModal(null)} />}
+      {modal?.kind === 'layout' && <ButtonLayout onClose={() => setModal(null)} />}
+      {modal?.kind === 'emulator' && <ActionMenu title={EMULATOR_LABEL[modal.id]} items={emulatorMenu(modal.id)} onClose={() => setModal(null)} />}
     </div>
   );
 }

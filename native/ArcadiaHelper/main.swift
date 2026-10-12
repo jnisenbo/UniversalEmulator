@@ -4,8 +4,8 @@
 //    pair it: the controller is a classic Bluetooth HID device, not BLE.
 //  - Report connected controllers, battery level, charging state (GameController).
 //  - Set the light bar color.
-//  - Watch for a "quit to Arcadia" gesture while an emulator is frontmost
-//    (GCController.shouldMonitorBackgroundEvents).
+//  - Watch the Home button while an emulator is frontmost, to open Arcadia's
+//    in-game menu, and drive that menu (GCController.shouldMonitorBackgroundEvents).
 //
 // Protocol: JSON lines on stdin (commands) / stdout (events).
 // See src/shared/helper-protocol.ts.
@@ -35,10 +35,11 @@ func log(_ message: String, level: String = "info") {
 
 final class ControllerMonitor {
     private var watching = false
-    private var holdMs = 1000
-    private var homeDownAt: Date?
+    private var menuMode = false
     private var chordDownAt: Date?
-    private var fired = false
+    private var chordFired = false
+    private var lastPressed = Set<String>()
+    private let chordHold: TimeInterval = 0.6
     private var timer: Timer?
     private var pollTimer: Timer?
     private var lightColor: GCColor?
@@ -90,20 +91,22 @@ final class ControllerMonitor {
         for c in GCController.controllers() { c.light?.color = color }
     }
 
-    func setWatching(_ enabled: Bool, holdMs: Int) {
+    /// game: report Home presses (open Arcadia's in-game menu).
+    /// menu: also report D-pad / face buttons so the menu works without focus.
+    func setWatching(_ enabled: Bool, mode: String) {
         watching = enabled
-        self.holdMs = holdMs
+        menuMode = mode == "menu"
         // Without this, GameController only delivers input while *we* are frontmost,
         // which we never are: the emulator is.
         GCController.shouldMonitorBackgroundEvents = enabled
-        homeDownAt = nil
         chordDownAt = nil
-        fired = false
+        chordFired = false
         pollTimer?.invalidate()
         pollTimer = nil
+        // Seed with the current state so a button already held doesn't fire.
+        lastPressed = currentPressed()
         if enabled {
-            // Poll at 20 Hz: a hold has to be noticed while nothing changes.
-            pollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.poll() }
+            pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.poll() }
         }
     }
 
@@ -112,28 +115,47 @@ final class ControllerMonitor {
         if let color = lightColor { c.light?.color = color }
     }
 
-    /// Hold Home, or hold Create + Options (fallback when macOS claims Home for the Games app).
-    private func poll() {
-        let now = Date()
-        var home = false
-        var chord = false
+    private func currentPressed() -> Set<String> {
+        var pressed = Set<String>()
         for c in GCController.controllers() {
             guard let pad = c.extendedGamepad else { continue }
-            home = home || (pad.buttonHome?.isPressed ?? false)
-            chord = chord || ((pad.buttonOptions?.isPressed ?? false) && pad.buttonMenu.isPressed)
+            if pad.buttonHome?.isPressed ?? false { pressed.insert("home") }
+            if pad.buttonOptions?.isPressed ?? false { pressed.insert("create") }
+            if pad.buttonMenu.isPressed { pressed.insert("options") }
+            if pad.buttonA.isPressed { pressed.insert("south") }
+            if pad.buttonB.isPressed { pressed.insert("east") }
+            if pad.dpad.up.isPressed || pad.leftThumbstick.yAxis.value > 0.6 { pressed.insert("up") }
+            if pad.dpad.down.isPressed || pad.leftThumbstick.yAxis.value < -0.6 { pressed.insert("down") }
+            if pad.dpad.left.isPressed || pad.leftThumbstick.xAxis.value < -0.6 { pressed.insert("left") }
+            if pad.dpad.right.isPressed || pad.leftThumbstick.xAxis.value > 0.6 { pressed.insert("right") }
         }
-        homeDownAt = home ? (homeDownAt ?? now) : nil
-        chordDownAt = chord ? (chordDownAt ?? now) : nil
-        if !home && !chord { fired = false }
-        guard !fired else { return }
+        return pressed
+    }
 
-        let threshold = Double(holdMs) / 1000
-        if let t = homeDownAt, now.timeIntervalSince(t) >= threshold {
-            fired = true
-            emit(["event": "quitGesture", "source": "home"])
-        } else if let t = chordDownAt, now.timeIntervalSince(t) >= threshold {
-            fired = true
-            emit(["event": "quitGesture", "source": "chord"])
+    /// Edge-triggered: each press reports once.
+    private func poll() {
+        guard watching else { return }
+        let now = Date()
+        let pressed = currentPressed()
+        let newlyPressed = pressed.subtracting(lastPressed)
+        lastPressed = pressed
+
+        if newlyPressed.contains("home") {
+            emit(["event": "home", "source": "home"])
+        }
+        // Create + Options held: fallback for when macOS sends Home to the Games app.
+        let chord = pressed.contains("create") && pressed.contains("options")
+        chordDownAt = chord ? (chordDownAt ?? now) : nil
+        if !chord { chordFired = false }
+        if let t = chordDownAt, !chordFired, now.timeIntervalSince(t) >= chordHold {
+            chordFired = true
+            emit(["event": "home", "source": "chord"])
+        }
+
+        if menuMode {
+            for b in ["up", "down", "left", "right", "south", "east"] where newlyPressed.contains(b) {
+                emit(["event": "button", "button": b])
+            }
         }
     }
 }
@@ -276,7 +298,7 @@ func handle(line: String) {
     case "setLight":
         monitor.setLight(r: obj["r"] as? Double ?? 0, g: obj["g"] as? Double ?? 0, b: obj["b"] as? Double ?? 0)
     case "watch":
-        monitor.setWatching(obj["enabled"] as? Bool ?? false, holdMs: obj["holdMs"] as? Int ?? 1000)
+        monitor.setWatching(obj["enabled"] as? Bool ?? false, mode: obj["mode"] as? String ?? "game")
     default:
         log("Unknown command \(cmd)", level: "warn")
     }

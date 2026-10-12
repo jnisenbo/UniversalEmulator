@@ -12,6 +12,9 @@ import { GameRow, type GameRowHandle } from '../components/GameRow';
 import { HeroBackground } from '../components/HeroBackground';
 import { LaunchOverlay, type LaunchOrigin } from '../components/LaunchOverlay';
 import { TopBar } from '../components/TopBar';
+import { ActionMenu, type MenuItem } from '../components/ActionMenu';
+import { SetupChecklist, useSetupSteps } from '../components/SetupChecklist';
+import type { ArtSearchResult } from '@shared/types';
 
 type Zone = 'tabs' | 'row' | 'play';
 
@@ -32,15 +35,22 @@ export function Home() {
   const scan = useStore((s) => s.scan);
   const toast = useStore((s) => s.toast);
   const setScreen = useStore((s) => s.setScreen);
+  const artMap = useStore((s) => s.art);
 
   const [zone, setZone] = useState<Zone>('row');
   const [pressed, setPressed] = useState(false);
   const [origin, setOrigin] = useState<LaunchOrigin | null>(null);
+  const [menu, setMenu] = useState<null | { kind: 'options' } | { kind: 'art'; results: ArtSearchResult[] | null; error?: string }>(null);
+  const [setupIndex, setSetupIndex] = useState(0);
+  const steps = useSetupSteps();
+  const openSettings = useStore((s) => s.openSettings);
   const row = useRef<GameRowHandle>(null);
 
   const index = Math.max(0, games.findIndex((g) => g.id === focusedGameId));
   const game = games[index] ?? null;
   const art = useMemo(() => (game ? placeholderArt(game) : null), [game]);
+  const gameArt = game ? artMap[game.id] : undefined;
+  const heroBackground = gameArt?.hero ? `url("${gameArt.hero}") center / cover no-repeat, ${art?.hero}` : (art?.hero ?? 'linear-gradient(120deg,#0b0d14,#05060a)');
 
   const focusIndex = useCallback(
     (i: number, opts?: { velocity?: number; momentum?: boolean }) => {
@@ -59,7 +69,8 @@ export function Home() {
       if (!g || session.kind !== 'idle') return;
       const rect = row.current?.tileRect(i);
       play('launch');
-      if (rect) setOrigin({ rect, background: placeholderArt(g).tile });
+      const cover = artMap[g.id]?.grid;
+      if (rect) setOrigin({ rect, background: cover ? `url("${cover}") center / cover no-repeat` : placeholderArt(g).tile });
       const result = await api.invoke('game:launch', { gameId: g.id });
       if (!result.ok) {
         play('error');
@@ -68,7 +79,7 @@ export function Home() {
       }
       for (const w of result.warnings) toast({ level: 'warn', title: w });
     },
-    [games, session.kind, toast],
+    [games, session.kind, toast, artMap],
   );
 
   const handle = useCallback(
@@ -82,8 +93,8 @@ export function Home() {
           setScreen('settings');
         } else if (games.length === 0) {
           play('confirm');
-          setScreen('settings');
-        } else {
+          openSettings(steps[setupIndex]?.id ?? 'emulators');
+        } else if (zone === 'row' || zone === 'play') {
           play('confirm');
           void launch(index);
         }
@@ -116,13 +127,31 @@ export function Home() {
           focusIndex(next);
           return true;
         }
+        case 'menu':
+          if (e.kind === 'press' && game) {
+            play('confirm');
+            setMenu({ kind: 'options' });
+          }
+          return true;
         case 'up':
+          if (games.length === 0 && zone === 'row' && setupIndex > 0) {
+            setSetupIndex(setupIndex - 1);
+            play('move');
+            return true;
+          }
           if (zone === 'play') setZone('row');
           else if (zone === 'row') setZone('tabs');
           else return true;
           play('move');
           return true;
         case 'down':
+          if (games.length === 0 && zone === 'row') {
+            if (setupIndex < steps.length - 1) {
+              setSetupIndex(setupIndex + 1);
+              play('move');
+            }
+            return true;
+          }
           if (zone === 'tabs') setZone('row');
           else if (zone === 'row' && game) setZone('play');
           else return true;
@@ -138,7 +167,7 @@ export function Home() {
           return false; // tabs (L/R) handled by App
       }
     },
-    [zone, games.length, index, game, focusIndex, launch, setScreen],
+    [zone, games.length, index, game, focusIndex, launch, setScreen, openSettings, steps, setupIndex],
   );
 
   useInputHandler(handle);
@@ -155,13 +184,36 @@ export function Home() {
 
   const info = game ? PLATFORM_INFO[game.platform] : null;
 
+  function gameMenu(): MenuItem[] {
+    if (!game) return [];
+    const hasKey = !!settings?.metadata.steamGridDbKey;
+    const artError = (e: Error): void => toast({ level: 'error', title: 'Artwork', detail: e.message });
+    return [
+      { label: 'Play', run: () => void launch(index) },
+      {
+        label: 'Choose artwork…',
+        detail: hasKey ? 'Pick the right game on SteamGridDB' : 'Add a SteamGridDB key in Settings → Artwork first',
+        disabled: !hasKey,
+        run: () => {
+          setMenu({ kind: 'art', results: null });
+          api
+            .invoke('art:search', { gameId: game.id })
+            .then((results) => setMenu({ kind: 'art', results }))
+            .catch((e: Error) => setMenu({ kind: 'art', results: [], error: e.message }));
+        },
+      },
+      { label: 'Refresh artwork', disabled: !hasKey, run: () => void api.invoke('art:refresh', { gameId: game.id }).catch(artError) },
+      { label: 'Show in Finder', detail: game.path, run: () => void api.invoke('game:reveal', { gameId: game.id }) },
+    ];
+  }
+
   return (
     <div className="screen home">
-      <HeroBackground artKey={game?.id ?? 'empty'} background={art?.hero ?? 'linear-gradient(120deg,#0b0d14,#05060a)'} drift={!!settings?.ui.backgroundDrift} />
+      <HeroBackground artKey={`${game?.id ?? 'empty'}-${gameArt?.hero ?? ''}`} background={heroBackground} drift={!!settings?.ui.backgroundDrift} />
       <TopBar focusedTab={zone === 'tabs' ? 'settings' : null} />
 
       {games.length > 0 ? (
-        <GameRow ref={row} games={games} focusedIndex={index} active={zone === 'row'} onHover={() => setZone('row')} onActivate={(i) => (i === index ? void launch(i) : focusIndex(i))} />
+        <GameRow ref={row} games={games} art={artMap} focusedIndex={index} active={zone === 'row'} onHover={() => setZone('row')} onActivate={(i) => (i === index ? void launch(i) : focusIndex(i))} />
       ) : (
         <div className="row-empty" />
       )}
@@ -174,7 +226,14 @@ export function Home() {
               {info.experimental && <span className="badge badge-warn">Experimental</span>}
               {!game.identified && <span className="badge badge-muted">Unidentified</span>}
             </div>
-            <h1 className="hero-title">{game.displayTitle}</h1>
+            {gameArt?.logo ? (
+              <h1 className="hero-logo-wrap">
+                <img className="hero-logo" src={gameArt.logo} alt={game.displayTitle} draggable={false} />
+              </h1>
+            ) : (
+              <h1 className="hero-title">{game.displayTitle}</h1>
+            )}
+            {game.note && <p className="hero-note">{game.note}</p>}
             <div className="hero-meta">
               {[game.gameId, game.format.toUpperCase(), formatSize(game.sizeBytes), EMULATOR_LABEL[game.emulator], game.discNumber > 0 ? `Disc ${game.discNumber + 1}` : null].filter(Boolean).join('  ·  ')}
             </div>
@@ -184,15 +243,9 @@ export function Home() {
           </>
         ) : (
           <>
-            <h1 className="hero-title">{scan ? 'Looking for games…' : 'Your library is empty'}</h1>
-            <p className="hero-meta">
-              {scan ? `${scan.scanned} of ${scan.total} files checked` : 'Add the folders where you keep your game dumps, and choose where your emulators are installed.'}
-            </p>
-            {!scan && (
-              <button className="play" data-focused={zone !== 'tabs'} onClick={() => setScreen('settings')}>
-                Open Settings
-              </button>
-            )}
+            <h1 className="hero-title">{scan ? 'Looking for games…' : 'Welcome to Arcadia'}</h1>
+            <p className="hero-meta">{scan ? `${scan.scanned} of ${scan.total} files checked` : 'Three steps and you’re playing.'}</p>
+            {!scan && <SetupChecklist steps={steps} focused={zone === 'row' ? setupIndex : -1} />}
           </>
         )}
       </section>
@@ -201,13 +254,31 @@ export function Home() {
 
       <ButtonHints
         hints={[
-          { button: 'south', label: zone === 'tabs' ? 'Open' : games.length ? 'Play' : 'Settings' },
+          { button: 'south', label: zone === 'tabs' ? 'Open' : games.length ? 'Play' : 'Set up' },
+          ...(games.length && zone !== 'tabs' ? [{ button: 'menu' as const, label: 'Options' }] : []),
           ...(zone !== 'row' ? [{ button: 'east' as const, label: 'Back' }] : []),
           { button: 'R', label: 'Settings' },
         ]}
       />
 
       <LaunchOverlay origin={origin} session={session} onClosed={() => setOrigin(null)} />
+      {menu?.kind === 'options' && game && <ActionMenu title={game.displayTitle} items={gameMenu()} onClose={() => setMenu(null)} />}
+      {menu?.kind === 'art' && game && (
+        <ActionMenu
+          title="Choose artwork"
+          onClose={() => setMenu(null)}
+          items={(menu.results ?? []).map<MenuItem>((r) => ({
+            label: r.name,
+            ...(r.year ? { detail: String(r.year) } : {}),
+            run: () =>
+              void api
+                .invoke('art:refresh', { gameId: game.id, sourceId: r.id })
+                .catch((e: Error) => toast({ level: 'error', title: 'Artwork', detail: e.message })),
+          }))}
+        >
+          <p className="menu-intro">{menu.error ?? (menu.results === null ? 'Searching SteamGridDB…' : menu.results.length ? `Matches for “${game.displayTitle}”` : 'No matches found.')}</p>
+        </ActionMenu>
+      )}
     </div>
   );
 }

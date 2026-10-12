@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PAD_BUTTONS } from './controls';
 
 const rgb = z.object({ r: z.number().int().min(0).max(255), g: z.number().int().min(0).max(255), b: z.number().int().min(0).max(255) });
 
@@ -14,12 +15,23 @@ export const ControllerProfileSchema = z.object({
   rumble: z.boolean().default(true),
   motion: z.boolean().default(true),
   lightBar: rgb.default({ r: 64, g: 120, b: 255 }),
+  /** Slot → physical button overrides, shared by every emulator. */
+  layout: z.partialRecord(z.enum(PAD_BUTTONS), z.enum(PAD_BUTTONS)).default({}),
   /** Device string Dolphin uses, e.g. "SDL/0/DualSense Wireless Controller". */
   dolphinDevice: z.string().default('SDL/0/DualSense Wireless Controller'),
 });
 export type ControllerProfile = z.infer<typeof ControllerProfileSchema>;
 
 const app = z.string().nullable().default(null);
+
+export const GraphicsSchema = z.object({
+  /** Internal resolution as a multiple of the console's native output. */
+  resolutionScale: z.number().int().min(1).max(4).default(2),
+  vsync: z.boolean().default(true),
+  aspect: z.enum(['auto', '16:9', '4:3', 'stretch']).default('auto'),
+  showFps: z.boolean().default(false),
+});
+export type Graphics = z.infer<typeof GraphicsSchema>;
 
 export const SettingsSchema = z.object({
   version: z.literal(1).default(1),
@@ -28,6 +40,7 @@ export const SettingsSchema = z.object({
     .object({
       dolphin: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),
       ryubing: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),
+      xemu: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),
       xenia: z
         .object({ appPath: app, argsTemplate: z.string().default('{game} --fullscreen=true') })
         .prefault({}),
@@ -36,6 +49,14 @@ export const SettingsSchema = z.object({
   /** Your own prod.keys, read-only, used to identify Switch dumps. Never copied. */
   switchKeysPath: z.string().nullable().default(null),
   controller: ControllerProfileSchema.prefault({}),
+  graphics: GraphicsSchema.prefault({}),
+  metadata: z
+    .object({
+      /** Your own SteamGridDB API key (steamgriddb.com → Preferences → API). */
+      steamGridDbKey: z.string().nullable().default(null),
+      autoFetch: z.boolean().default(true),
+    })
+    .prefault({}),
   ui: z
     .object({
       sounds: z.boolean().default(true),

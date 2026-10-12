@@ -7,13 +7,18 @@ export type HelperCommand =
   | { cmd: 'pair'; timeoutSec: number }
   | { cmd: 'cancelPair' }
   | { cmd: 'setLight'; r: number; g: number; b: number }
-  /** Watch the controller system-wide (even when an emulator is frontmost). */
-  | { cmd: 'watch'; enabled: boolean; holdMs: number };
+  /**
+   * Watch the controller system-wide (even when an emulator is frontmost).
+   * game: report Home presses. menu: also report menu navigation buttons.
+   */
+  | { cmd: 'watch'; enabled: boolean; mode: 'game' | 'menu' };
 
 export type HelperEvent =
   | { event: 'ready'; version: string }
   | { event: 'controllers'; controllers: { id: string; name: string; isDualSense: boolean; battery: number | null; charging: boolean | null }[] }
   | { event: 'pair'; phase: 'searching' | 'found' | 'pairing' | 'connected' | 'failed' | 'timeout' | 'cancelled'; name?: string; message?: string }
-  /** Home held, or Create + Options held, for holdMs while watching. */
-  | { event: 'quitGesture'; source: 'home' | 'chord' }
+  /** Home pressed, or Create + Options held, while watching. */
+  | { event: 'home'; source: 'home' | 'chord' }
+  /** Menu navigation while in menu mode. */
+  | { event: 'button'; button: 'up' | 'down' | 'left' | 'right' | 'south' | 'east' }
   | { event: 'log'; level: 'info' | 'warn' | 'error'; message: string };

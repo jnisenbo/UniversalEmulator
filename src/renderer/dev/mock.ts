@@ -15,7 +15,15 @@ const SAMPLE: [string, Platform, string, string][] = [
   ['Wind Waker', 'gamecube', 'GZLE01', 'gcz'],
   ['Super Mario Odyssey', 'switch', '0100000000010000', 'nsp'],
   ['Donkey Kong Country Returns', 'wii', 'SF8E01', 'rvz'],
+  ['Halo: Combat Evolved', 'xbox', '4D530004', 'xiso'],
 ];
+
+function deepMerge(base: unknown, patch: unknown): unknown {
+  if (typeof base !== 'object' || base === null || Array.isArray(base) || typeof patch !== 'object' || patch === null || Array.isArray(patch)) return patch === undefined ? base : patch;
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch)) out[k] = k === 'layout' ? v : deepMerge(out[k], v);
+  return out;
+}
 
 /** Development stand-in for the preload API; never shipped in the Electron build path. */
 export function createMockApi(): ArcadiaApi {
@@ -40,7 +48,7 @@ export function createMockApi(): ArcadiaApi {
 
   const handlers: { [C in RequestChannel]: (req: IpcRequests[C]['req']) => IpcRequests[C]['res'] | Promise<IpcRequests[C]['res']> } = {
     'settings:get': () => settings,
-    'settings:update': (patch) => (settings = { ...settings, ...(patch as Partial<Settings>), controller: { ...settings.controller, ...(patch.controller ?? {}) }, ui: { ...settings.ui, ...(patch.ui ?? {}) } } as Settings),
+    'settings:update': (patch) => (settings = deepMerge(settings, patch) as Settings),
     'library:list': () => games,
     'library:scan': async () => {
       for (let i = 0; i <= games.length; i++) {
@@ -81,6 +89,47 @@ export function createMockApi(): ArcadiaApi {
     'controller:setLight': () => undefined,
     'system:openSettingsPane': () => undefined,
     'app:quit': () => undefined,
+    'emulators:installInfo': ({ checkLatest }) =>
+      (['dolphin', 'ryubing', 'xemu', 'xenia'] as const).map((id) => ({
+        id,
+        installable: id !== 'xenia',
+        homepage: 'https://example.invalid/',
+        managedVersion: id === 'dolphin' ? '2509' : null,
+        latestVersion: checkLatest && id !== 'xenia' ? (id === 'dolphin' ? '2512' : '1.0') : null,
+        ...(id === 'ryubing' ? { firstRun: 'Open Ryubing once and install the keys and firmware dumped from your own Switch.' } : {}),
+      })),
+    'emulators:install': async ({ id }) => {
+      const total = 80_000_000;
+      for (const phase of ['resolving', 'downloading', 'verifying', 'extracting', 'installing'] as const) {
+        if (phase === 'downloading') {
+          for (let r = 0; r <= total; r += total / 8) {
+            emit('emulators:installProgress', { id, phase, received: r, total, version: '1.0' });
+            await new Promise((res) => setTimeout(res, 120));
+          }
+        } else {
+          emit('emulators:installProgress', { id, phase, version: '1.0' });
+          await new Promise((res) => setTimeout(res, 300));
+        }
+      }
+      emit('emulators:installProgress', { id, phase: 'done', version: '1.0' });
+      settings = { ...settings, emulators: { ...settings.emulators, [id]: { ...settings.emulators[id], appPath: `/Users/me/Applications/${id}.app` } } };
+      return { ok: true, path: `/Users/me/Applications/${id}.app` };
+    },
+    'emulators:openApp': () => undefined,
+    'emulators:openHomepage': () => undefined,
+    'art:all': () => ({}),
+    'art:refresh': () => null,
+    'art:search': ({ gameId }) => {
+      const g = games.find((x) => x.id === gameId);
+      return [
+        { id: 1, name: g?.displayTitle ?? 'Game', year: 2007 },
+        { id: 2, name: `${g?.displayTitle ?? 'Game'} (Demo)`, year: 2007 },
+        { id: 3, name: `${g?.displayTitle ?? 'Game'} HD`, year: 2019 },
+      ];
+    },
+    'game:reveal': () => undefined,
+    'overlay:resume': () => undefined,
+    'overlay:quitGame': () => undefined,
   };
 
   return {

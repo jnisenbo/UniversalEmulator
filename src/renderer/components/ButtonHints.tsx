@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { FaceGlyph, ShoulderGlyph, type FaceButton } from './Glyph';
+import { FaceGlyph, MenuGlyph, ShoulderGlyph, type FaceButton } from './Glyph';
 
 export interface Hint {
-  button: FaceButton | 'L' | 'R';
+  button: FaceButton | 'L' | 'R' | 'menu';
   label: string;
 }
 
@@ -13,7 +13,7 @@ export function ButtonHints({ hints, children }: { hints: Hint[]; children?: Rea
       {children}
       {hints.map((h) => (
         <span key={h.button + h.label} className="hint">
-          {h.button === 'L' || h.button === 'R' ? <ShoulderGlyph side={h.button} /> : <FaceGlyph button={h.button} />}
+          {h.button === 'L' || h.button === 'R' ? <ShoulderGlyph side={h.button} /> : h.button === 'menu' ? <MenuGlyph /> : <FaceGlyph button={h.button} />}
           {h.label}
         </span>
       ))}

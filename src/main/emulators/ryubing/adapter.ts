@@ -45,7 +45,7 @@ export const ryubingAdapter: EmulatorAdapter = {
     }
 
     const source = JSON.parse(await readFile(sourceConfig, 'utf8')) as Record<string, unknown>;
-    const { config, controllersUpdated, missingKeys } = patchRyubingConfig(source, profile);
+    const { config, controllersUpdated, missingKeys } = patchRyubingConfig(source, profile, ctx.settings.graphics);
     await writeFileAtomic(join(ctx.managedDir, CONFIG), JSON.stringify(config, null, 2));
 
     const warnings: string[] = [];

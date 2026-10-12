@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { PLATFORM_INFO } from '@shared/platforms';
-import type { Game } from '@shared/types';
+import type { Game, GameArt } from '@shared/types';
 import { monogram, placeholderArt } from '../art/placeholder';
 import { onFrame } from '../engine/loop';
 import { SPRINGS, Spring } from '../engine/spring';
@@ -24,6 +24,7 @@ export interface GameRowHandle {
 
 interface Props {
   games: Game[];
+  art: Record<string, GameArt>;
   focusedIndex: number;
   /** Whether the row itself has focus (vs. top bar or Play button). */
   active: boolean;
@@ -31,7 +32,7 @@ interface Props {
   onActivate(index: number): void;
 }
 
-export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games, focusedIndex, active, onHover, onActivate }, ref) {
+export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games, art: artMap, focusedIndex, active, onHover, onActivate }, ref) {
   const trackRef = useRef<HTMLDivElement>(null);
   const tileEls = useRef<(HTMLDivElement | null)[]>([]);
   const scroll = useRef(new Spring(0, SPRINGS.smooth));
@@ -125,6 +126,7 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
       <div className="row-track" ref={trackRef}>
         {games.map((g, i) => {
           const art = placeholderArt(g);
+          const cover = artMap[g.id]?.grid;
           const info = PLATFORM_INFO[g.platform];
           return (
             <div
@@ -138,7 +140,7 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
               onPointerEnter={() => onHover(i)}
               onClick={() => onActivate(i)}
             >
-              <span className="tile-monogram">{monogram(g.displayTitle)}</span>
+              {cover ? <img className="tile-cover" src={cover} alt="" draggable={false} /> : <span className="tile-monogram">{monogram(g.displayTitle)}</span>}
               <span className="tile-platform">{info.short}</span>
               <span className="tile-title">{g.displayTitle}</span>
             </div>

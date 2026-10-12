@@ -3,6 +3,22 @@ import type { Settings } from './settings';
 
 export type DiscFormat = 'iso' | 'rvz' | 'wia' | 'wbfs' | 'gcz' | 'nsp' | 'xci' | 'xiso' | 'xex' | 'stfs';
 
+/** Cached artwork for a game, as URLs the renderer can load (arcadia-art://…). */
+export interface GameArt {
+  grid?: string;
+  hero?: string;
+  logo?: string;
+  /** SteamGridDB game the art came from. */
+  sourceId?: number;
+  sourceName?: string;
+}
+
+export interface ArtSearchResult {
+  id: number;
+  name: string;
+  year: number | null;
+}
+
 /** What a probe learned from a file's own bytes. */
 export interface GameIdentity {
   platform: Platform;
@@ -14,6 +30,8 @@ export interface GameIdentity {
   discNumber: number;
   /** False when the format matched but the ID couldn't be read. */
   identified: boolean;
+  /** Something the user should know before launching (e.g. needs conversion). */
+  note?: string;
   /** Switch only: base game, update or DLC. Only base games are listed. */
   contentKind?: 'base' | 'update' | 'dlc';
 }
@@ -98,5 +116,27 @@ export interface PairEvent {
 }
 
 export type PickKind = 'app' | 'folder' | 'file';
+
+export interface InstallProgress {
+  id: import('./platforms').EmulatorId;
+  phase: 'resolving' | 'downloading' | 'verifying' | 'extracting' | 'installing' | 'done' | 'error';
+  received?: number;
+  total?: number | null;
+  version?: string;
+  message?: string;
+}
+
+export interface InstallInfo {
+  id: import('./platforms').EmulatorId;
+  /** Arcadia can download it. */
+  installable: boolean;
+  homepage: string;
+  /** Installed by Arcadia (in ~/Applications), with its version. */
+  managedVersion: string | null;
+  /** Newest version available, if it could be checked. */
+  latestVersion: string | null;
+  latestError?: string;
+  firstRun?: string;
+}
 
 export type { Settings };

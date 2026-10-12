@@ -33,10 +33,18 @@ jobs:
         run: |
           echo '{"cmd":"status"}' | (cat; sleep 2) | ./native/build/arcadia-helper | head -3
       - run: pnpm test
+      - name: Live emulator sources and installs
+        run: pnpm exec vitest run test/live.test.ts --reporter=verbose
+        env: { LIVE_SOURCES: '1', LIVE_INSTALL: '1' }
+        continue-on-error: true
       - run: pnpm build
       - run: pnpm exec electron-builder --mac --arm64 --publish never
+      - name: Verify bundle signature
+        run: codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Arcadia.app
+      # ditto keeps the symlinks inside Electron's frameworks; a plain zip of the .app breaks them.
+      - run: ditto -c -k --keepParent dist/mac-arm64/Arcadia.app dist/Arcadia-mac-arm64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: Arcadia-mac-arm64
-          path: dist/mac-arm64/Arcadia.app
+          path: dist/Arcadia-mac-arm64.zip
           retention-days: 7

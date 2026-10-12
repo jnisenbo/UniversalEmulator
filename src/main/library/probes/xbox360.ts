@@ -74,13 +74,44 @@ export function parseXexTitleId(head: Buffer): { titleId: string; discNumber: nu
 
 const XEX_HEAD_BYTES = 0x1000;
 
+/**
+ * Original Xbox XBE: "XBEH" magic, u32 base address at 0x104, u32 certificate
+ * address (virtual) at 0x118. Certificate: u32 size, u32 time, u32 title ID,
+ * then the title name as 40 UTF-16LE characters.
+ */
+export function parseXbeCertificate(head: Buffer): { titleId: string; title: string | null } | null {
+  if (head.length < 0x120 || head.toString('latin1', 0, 4) !== 'XBEH') return null;
+  const base = head.readUInt32LE(0x104);
+  const cert = head.readUInt32LE(0x118) - base;
+  if (cert < 0 || cert + 0x5c > head.length) return null;
+  const titleId = head.readUInt32LE(cert + 8).toString(16).toUpperCase().padStart(8, '0');
+  const raw = head.toString('utf16le', cert + 0x0c, cert + 0x0c + 80);
+  const end = raw.indexOf('\0');
+  const title = (end === -1 ? raw : raw.slice(0, end)).trim();
+  return { titleId, title: title || null };
+}
+
 export async function probeXboxIso(r: Reader): Promise<GameIdentity | null> {
   const part = await findPartition(r);
   if (!part) return null;
   const unidentified: GameIdentity = { platform: 'xbox360', format: 'xiso', gameId: null, title: null, discNumber: 0, identified: false };
   const dir = await r.read(part.base + part.rootSector * SECTOR, Math.min(part.rootSize, 1 << 20));
   const xex = findInDirectory(dir, 'default.xex');
-  if (!xex) return unidentified; // Could be an original Xbox disc (default.xbe): xemu, Phase 2.
+  if (!xex) {
+    const xbe = findInDirectory(dir, 'default.xbe');
+    if (!xbe) return unidentified;
+    const parsed = parseXbeCertificate(await r.read(part.base + xbe.sector * SECTOR, XEX_HEAD_BYTES));
+    return {
+      platform: 'xbox',
+      format: 'xiso',
+      gameId: parsed?.titleId ?? null,
+      title: parsed?.title ?? null,
+      discNumber: 0,
+      identified: !!parsed,
+      // xemu boots XISO images; full Redump dumps need converting first.
+      ...(part.base !== 0 ? { note: 'This is a full disc dump. xemu needs an XISO: convert it with extract-xiso -r first.' } : {}),
+    };
+  }
   const parsed = parseXexTitleId(await r.read(part.base + xex.sector * SECTOR, XEX_HEAD_BYTES));
   if (!parsed) return unidentified;
   return { ...unidentified, gameId: parsed.titleId, discNumber: parsed.discNumber, identified: true };

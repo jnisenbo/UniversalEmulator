@@ -1,3 +1,4 @@
+import { PAD_INDEX, resolveButton, type ButtonLayout, type PadButton } from '@shared/controls';
 import { onFrame } from '../engine/loop';
 import type { Action, InputEvent, InputHandler, InputSource } from './actions';
 import { isDirection } from './actions';
@@ -8,17 +9,23 @@ import { isDirection } from './actions';
  *   0 south · 1 east · 2 west · 3 north · 4 L1 · 5 R1 · 6 L2 · 7 R2
  *   8 Create · 9 Options · 10 L3 · 11 R3 · 12–15 D-pad · 16 Home
  */
-const BUTTON_ACTIONS: Partial<Record<number, Action>> = {
-  0: 'confirm',
-  1: 'back',
-  4: 'tabPrev',
-  5: 'tabNext',
-  9: 'menu',
-  12: 'up',
-  13: 'down',
-  14: 'left',
-  15: 'right',
-};
+const SLOT_ACTIONS: [PadButton, Action][] = [
+  ['south', 'confirm'],
+  ['east', 'back'],
+  ['l1', 'tabPrev'],
+  ['r1', 'tabNext'],
+  ['options', 'menu'],
+  ['up', 'up'],
+  ['down', 'down'],
+  ['left', 'left'],
+  ['right', 'right'],
+];
+
+/** The launcher follows the same button layout as the games. */
+let buttonActions: [number, Action][] = SLOT_ACTIONS.map(([slot, a]) => [PAD_INDEX[slot], a]);
+export function setButtonLayout(layout: ButtonLayout): void {
+  buttonActions = SLOT_ACTIONS.map(([slot, a]) => [PAD_INDEX[resolveButton(layout, slot)], a]);
+}
 
 const KEY_ACTIONS: Record<string, Action> = {
   ArrowUp: 'up',
@@ -72,6 +79,18 @@ function dispatch(e: InputEvent): void {
     const r = handlers[i]!(e);
     if (r) return; // consumed; otherwise fall through to the handler below
   }
+}
+
+/**
+ * Synthetic input from outside the page (the helper while the in-game menu is
+ * open). Ignored when this window has focus, since the Gamepad API already
+ * delivers the same presses.
+ */
+export function injectAction(action: Action): void {
+  if (document.hasFocus() && navigator.getGamepads?.().some((p) => p)) return;
+  noteActivity('pad');
+  dispatch({ action, kind: 'press', source: 'pad' });
+  dispatch({ action, kind: 'release', source: 'pad' });
 }
 
 export function setInputEnabled(on: boolean): void {
@@ -162,9 +181,10 @@ function readPads(now: number): void {
     latched = false;
   }
 
-  for (const [index, action] of Object.entries(BUTTON_ACTIONS)) {
-    update(action!, pad.buttons[Number(index)]?.pressed ?? false, 'pad', now);
-  }
+  // Several slots can share a physical button only transiently; OR them per action.
+  const down = new Map<Action, boolean>();
+  for (const [index, action] of buttonActions) down.set(action, (down.get(action) ?? false) || (pad.buttons[index]?.pressed ?? false));
+  for (const [action, isDown] of down) update(action, isDown, 'pad', now);
 
   if (!stickNavigation) return;
   const x = pad.axes[0] ?? 0;

@@ -308,3 +308,60 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   :root { --text-2: rgb(255 255 255 / 0.9); --text-3: rgb(255 255 255 / 0.78); --material-heavy: rgb(10 11 16); --material-edge: rgb(255 255 255 / 0.6); }
   .srow, .settings-nav, .modal, .toast { border: 1px solid var(--material-edge); }
 }
+
+/* ---------- Artwork ---------- */
+.tile-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tile:has(.tile-cover) .tile-platform { background: rgb(0 0 0 / 0.55); backdrop-filter: blur(8px); }
+.hero-logo-wrap { margin: 0; }
+.hero-logo { display: block; max-width: min(34rem, 48vw); max-height: 9rem; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 24px rgb(0 0 0 / 0.5)); }
+.hero-note { margin: 0.6rem 0 0; color: var(--warn); font-weight: 600; font-size: 0.98rem; }
+
+/* ---------- Button layout ---------- */
+.layout-list { max-height: 60vh; overflow-y: auto; scrollbar-width: none; padding: 0.2rem; }
+.layout-list .srow { min-height: 3.6rem; }
+.layout-list .choice { width: auto; height: auto; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.9rem; font-weight: 650; }
+.layout-list .choice[data-selected='true'] { background: var(--text); color: #0a0c12; transform: none; box-shadow: none; }
+.capture { position: absolute; inset: 0; border-radius: inherit; display: grid; place-items: center; background: rgb(5 6 10 / 0.7); animation: fade-in 160ms ease-out both; }
+.capture-card { text-align: center; padding: 2rem 3rem; border-radius: 1.4rem; background: var(--material-heavy); box-shadow: inset 0 1px 0 var(--material-edge); }
+.capture-title { color: var(--text-2); font-weight: 600; }
+.capture-slot { font-size: 2.2rem; font-weight: 750; letter-spacing: -0.02em; margin: 0.4rem 0; }
+.capture-detail { color: var(--text-3); }
+.capture-hint { margin-top: 1.2rem; font-size: 0.9rem; color: var(--text-3); animation: flash 1.4s ease-in-out infinite; }
+
+/* ---------- Action menus ---------- */
+.modal:has(.menu-narrow) { width: min(44rem, 92vw); }
+.menu-narrow { max-height: 62vh; overflow-y: auto; scrollbar-width: none; padding: 0.2rem; }
+.menu-intro { margin: -0.6rem 0 1.2rem; color: var(--text-2); font-size: 1.02rem; line-height: 1.5; }
+.srow[data-disabled='true'] { opacity: 0.45; }
+/* Choices without a swatch are labelled pills (e.g. aspect ratio). */
+.choice:not([style]) { width: auto; height: auto; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.9rem; font-weight: 650; color: var(--text-2); }
+.choice:not([style])[data-selected='true'] { background: var(--text); color: #0a0c12; transform: none; box-shadow: none; }
+.progress { width: 10rem; height: 0.4rem; border-radius: 999px; background: rgb(255 255 255 / 0.15); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 0.8rem; }
+.progress > span { display: block; height: 100%; background: var(--accent); transition: width 150ms linear; }
+
+/* ---------- First-run checklist ---------- */
+.checklist { list-style: none; margin: 1.6rem 0 0; padding: 0; display: grid; gap: 0.7rem; max-width: 40rem; }
+.check-item { display: flex; gap: 1rem; align-items: center; padding: 0.9rem 1.2rem; border-radius: 1rem; background: rgb(255 255 255 / 0.06); backdrop-filter: var(--blur-light); transition: background-color 140ms ease-out, box-shadow 140ms ease-out; }
+.check-item[data-focused='true'] { background: rgb(255 255 255 / 0.14); box-shadow: 0 0 0 2px var(--focus-ring); }
+.check-mark { flex: none; width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 750; background: rgb(255 255 255 / 0.12); }
+.check-item[data-done='true'] .check-mark { background: var(--ok); color: #05210f; }
+.check-label { display: block; font-weight: 650; font-size: 1.15rem; }
+.check-detail { display: block; color: var(--text-2); font-size: 0.95rem; }
+
+/* ---------- In-game menu (overlay window) ---------- */
+html.overlay, html.overlay body, html.overlay #root { background: transparent; }
+.ov-root { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8vh; }
+.ov-scrim { position: absolute; inset: 0; background: rgb(0 0 0 / 0.5); animation: fade-in 180ms ease-out both; }
+.ov-panel { position: relative; width: min(56rem, 92vw); border-radius: 1.8rem; padding: 1.8rem 2rem 1.2rem; animation: ov-in 320ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+@keyframes ov-in { from { opacity: 0; transform: translateY(2rem) scale(0.98); } }
+.ov-game { display: flex; gap: 1.2rem; align-items: center; }
+.ov-cover { width: 5.5rem; height: 5.5rem; border-radius: 1rem; flex: none; box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.4); }
+.ov-title { font-size: 1.7rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.1; }
+.ov-meta { margin-top: 0.4rem; color: var(--text-2); font-weight: 550; }
+.ov-actions { display: flex; gap: 0.9rem; margin: 1.6rem 0 1rem; flex-wrap: wrap; }
+.ov-action { font-size: 1.15rem; padding: 0.9rem 2rem; }
+.ov-action[data-danger='true'][data-focused='true'] { background: var(--error); color: #fff; }
+.ov-footer { display: flex; align-items: center; justify-content: space-between; min-height: 2rem; }
+.ov-footer .hints { position: static; }
+.ov-battery { color: var(--text-3); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .ov-panel { animation: fade-in 160ms ease both; } }

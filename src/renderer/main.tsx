@@ -1,14 +1,20 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { OverlayApp } from './overlay/OverlayApp';
 import { installInput } from './input/input';
-import { bootstrap } from './state/store';
+import { bootstrap, useStore } from './state/store';
 import './styles.css';
 
+const isOverlay = location.hash === '#overlay';
 installInput();
-void bootstrap();
+void bootstrap({ overlay: isOverlay });
+function OverlayGate() {
+  return useStore((s) => s.ready) ? <OverlayApp /> : null;
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {isOverlay ? <OverlayGate /> : <App />}
   </StrictMode>,
 );

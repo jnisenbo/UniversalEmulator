@@ -35,6 +35,16 @@ export function ShoulderGlyph({ side }: { side: 'L' | 'R' }) {
   );
 }
 
+/** The small menu button (three short bars), drawn generically. */
+export function MenuGlyph({ size = '1.3em' }: { size?: string }) {
+  return (
+    <svg className="glyph" width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <rect x="5" y="4" width="14" height="16" rx="4" fill="none" stroke="currentColor" strokeOpacity={0.6} strokeWidth={1.4} />
+      <path d="M9 9.5h6M9 12h6M9 14.5h6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function DpadGlyph({ size = '1.3em' }: { size?: string }) {
   return (
     <svg className="glyph" width={size} height={size} viewBox="0 0 24 24" aria-hidden>

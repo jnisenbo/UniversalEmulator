@@ -1,5 +1,9 @@
 import type {
+  ArtSearchResult,
   ControllerStatus,
+  GameArt,
+  InstallInfo,
+  InstallProgress,
   EmulatorStatus,
   Game,
   LaunchResult,
@@ -20,6 +24,10 @@ export interface IpcRequests {
   'library:scan': { req: void; res: ScanSummary };
   'emulators:status': { req: void; res: EmulatorStatus[] };
   'emulators:autodetect': { req: void; res: Partial<Record<EmulatorId, string>> };
+  'emulators:installInfo': { req: { checkLatest: boolean }; res: InstallInfo[] };
+  'emulators:install': { req: { id: EmulatorId }; res: { ok: boolean; path?: string; error?: string } };
+  'emulators:openApp': { req: { id: EmulatorId }; res: void };
+  'emulators:openHomepage': { req: { id: EmulatorId }; res: void };
   'game:launch': { req: { gameId: string }; res: LaunchResult };
   'session:get': { req: void; res: SessionState };
   'session:quit': { req: void; res: void };
@@ -30,6 +38,12 @@ export interface IpcRequests {
   'controller:setLight': { req: { r: number; g: number; b: number }; res: void };
   'system:openSettingsPane': { req: 'bluetooth' | 'gameControllers' | 'privacy'; res: void };
   'app:quit': { req: void; res: void };
+  'art:all': { req: void; res: Record<string, GameArt> };
+  'art:refresh': { req: { gameId: string; sourceId?: number }; res: GameArt | null };
+  'art:search': { req: { gameId: string; term?: string }; res: ArtSearchResult[] };
+  'game:reveal': { req: { gameId: string }; res: void };
+  'overlay:resume': { req: void; res: void };
+  'overlay:quitGame': { req: void; res: void };
 }
 
 /** Main → renderer push channels. */
@@ -38,6 +52,11 @@ export interface IpcEvents {
   'session:state': SessionState;
   'controller:status': ControllerStatus;
   'controller:pair': PairEvent;
+  /** Menu navigation forwarded from the helper while the in-game menu is open. */
+  'overlay:input': { action: 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' };
+  'overlay:opened': { gameId: string };
+  'art:updated': { gameId: string; art: GameArt | null };
+  'emulators:installProgress': InstallProgress;
 }
 
 export type RequestChannel = keyof IpcRequests;
@@ -50,6 +69,10 @@ export const REQUEST_CHANNELS = [
   'library:scan',
   'emulators:status',
   'emulators:autodetect',
+  'emulators:installInfo',
+  'emulators:install',
+  'emulators:openApp',
+  'emulators:openHomepage',
   'game:launch',
   'session:get',
   'session:quit',
@@ -60,6 +83,12 @@ export const REQUEST_CHANNELS = [
   'controller:setLight',
   'system:openSettingsPane',
   'app:quit',
+  'art:all',
+  'art:refresh',
+  'art:search',
+  'game:reveal',
+  'overlay:resume',
+  'overlay:quitGame',
 ] as const satisfies readonly RequestChannel[];
 
 export const EVENT_CHANNELS = [
@@ -67,6 +96,10 @@ export const EVENT_CHANNELS = [
   'session:state',
   'controller:status',
   'controller:pair',
+  'overlay:input',
+  'overlay:opened',
+  'art:updated',
+  'emulators:installProgress',
 ] as const satisfies readonly EventChannel[];
 
 export interface ArcadiaApi {
