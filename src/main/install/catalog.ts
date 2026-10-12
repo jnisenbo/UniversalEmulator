@@ -9,7 +9,9 @@ import type { EmulatorId } from '@shared/platforms';
  */
 export type Source =
   | { kind: 'cask'; token: string }
-  | { kind: 'github'; repo: string; asset: RegExp };
+  | { kind: 'github'; repo: string; asset: RegExp }
+  /** Forgejo/Gitea release API (Ryubing hosts its builds on git.ryujinx.app). */
+  | { kind: 'forgejo'; host: string; repo: string; asset: RegExp; label?: string };
 
 export interface CatalogEntry {
   id: EmulatorId;
@@ -38,8 +40,9 @@ export const CATALOG: Record<EmulatorId, CatalogEntry> = {
   ryubing: {
     id: 'ryubing',
     sources: [
+      { kind: 'forgejo', host: 'git.ryujinx.app', repo: 'Ryubing/Stable', asset: /macos.*\.(tar\.gz|zip|dmg)$/i },
       { kind: 'cask', token: 'ryubing' },
-      { kind: 'github', repo: 'Ryubing/Stable-Releases', asset: /macos.*\.(tar\.gz|zip|dmg)$/i },
+      { kind: 'forgejo', host: 'git.ryujinx.app', repo: 'Ryubing/Canary', asset: /macos.*\.(tar\.gz|zip|dmg)$/i, label: 'Canary' },
     ],
     hosts: [...GITHUB_HOSTS, 'git.ryujinx.app'],
     appName: /^(Ryujinx|Ryubing)\.app$/i,

@@ -45,20 +45,44 @@ async function fromGithub(repo: string, asset: RegExp, fetchJson: JsonFetch): Pr
   return { version: rel.tag_name.replace(/^v/, ''), url: a.browser_download_url, sha256: digest, source: `GitHub ${repo}` };
 }
 
+interface ForgejoRelease {
+  tag_name?: string;
+  assets?: { name: string; browser_download_url: string }[];
+}
+
+/** Forgejo publishes no per-asset checksum; the installer verifies the code signature instead. */
+async function fromForgejo(host: string, repo: string, asset: RegExp, fetchJson: JsonFetch, label?: string): Promise<Release | null> {
+  const res = await fetchJson(`https://${host}/api/v1/repos/${repo}/releases/latest`);
+  if (!res.ok) return null;
+  const rel = (await res.json()) as ForgejoRelease;
+  const a = rel.assets?.find((x) => asset.test(x.name));
+  if (!a || !rel.tag_name) return null;
+  const version = rel.tag_name.replace(/^v/, '');
+  return { version: label ? `${version} (${label})` : version, url: a.browser_download_url, sha256: null, source: `${host}/${repo}` };
+}
+
+const describe = (s: Source): string => (s.kind === 'cask' ? `Homebrew cask "${s.token}"` : s.kind === 'github' ? `GitHub ${s.repo}` : `${s.host}/${s.repo}`);
+
 /** First source that yields a release whose URL is on an allowed host. */
 export async function resolveRelease(entry: CatalogEntry, fetchJson: JsonFetch): Promise<Release> {
   const errors: string[] = [];
   for (const s of entry.sources as Source[]) {
     try {
-      const r = s.kind === 'cask' ? await fromCask(s.token, fetchJson) : await fromGithub(s.repo, s.asset, fetchJson);
-      if (!r) continue;
+      const r =
+        s.kind === 'cask' ? await fromCask(s.token, fetchJson)
+        : s.kind === 'github' ? await fromGithub(s.repo, s.asset, fetchJson)
+        : await fromForgejo(s.host, s.repo, s.asset, fetchJson, s.label);
+      if (!r) {
+        errors.push(`${describe(s)}: no macOS build`);
+        continue;
+      }
       if (!hostAllowed(r.url, entry.hosts)) {
         errors.push(`${r.source} points to an unexpected host`);
         continue;
       }
       return r;
     } catch (err) {
-      errors.push((err as Error).message);
+      errors.push(`${describe(s)}: ${(err as Error).message}`);
     }
   }
   throw new Error(`Couldn't find a macOS download${errors.length ? ` (${errors.join('; ')})` : ''}. Download it from ${entry.homepage} instead.`);

@@ -136,8 +136,8 @@ describe('emulator installer', () => {
     const fetchJson: JsonFetch = (url) =>
       url.includes('formulae.brew.sh')
         ? json({}, false)
-        : json({ tag_name: 'v1.3.3', assets: [{ name: 'ryujinx-1.3.3-win_x64.zip', browser_download_url: 'https://github.com/a' }, { name: 'ryujinx-1.3.3-macos_universal.app.tar.gz', browser_download_url: 'https://github.com/Ryubing/Stable-Releases/releases/download/1.3.3/r.tar.gz', digest: `sha256:${'c'.repeat(64)}` }] });
-    expect(await resolveRelease(CATALOG.ryubing, fetchJson)).toMatchObject({ version: '1.3.3', sha256: 'c'.repeat(64) });
+        : json({ tag_name: 'v0.8.136', assets: [{ name: 'xemu-0.8.136-windows-x86_64.zip', browser_download_url: 'https://github.com/a' }, { name: 'xemu-0.8.136-macos-universal.zip', browser_download_url: 'https://github.com/xemu-project/xemu/releases/download/v0.8.136/xemu-0.8.136-macos-universal.zip', digest: `sha256:${'c'.repeat(64)}` }] });
+    expect(await resolveRelease(CATALOG.xemu, fetchJson)).toMatchObject({ version: '0.8.136', sha256: 'c'.repeat(64) });
   });
 
   it('rejects a source that points somewhere unexpected', async () => {
@@ -176,5 +176,19 @@ describe('artwork', () => {
     expect(art?.logo).toBeUndefined();
     expect(store.filePath(art!.grid!)).toMatch(/grid\.png$/);
     expect(calls[0]).toContain('/search/autocomplete/Super%20Mario%20Galaxy');
+  });
+});
+
+describe('emulator installer: Forgejo', () => {
+  it('reads Ryubing releases from its Forgejo server', async () => {
+    const fetchJson: JsonFetch = (url) =>
+      url.startsWith('https://git.ryujinx.app/api/v1/repos/Ryubing/Stable/')
+        ? json({ tag_name: '1.3.3', assets: [{ name: 'ryujinx-1.3.3-linux_x64.tar.gz', browser_download_url: 'https://git.ryujinx.app/x' }, { name: 'ryujinx-1.3.3-macos_universal.app.tar.gz', browser_download_url: 'https://git.ryujinx.app/Ryubing/Stable/releases/download/1.3.3/ryujinx-1.3.3-macos_universal.app.tar.gz' }] })
+        : json({}, false);
+    expect(await resolveRelease(CATALOG.ryubing, fetchJson)).toMatchObject({ version: '1.3.3', sha256: null, source: 'git.ryujinx.app/Ryubing/Stable' });
+  });
+
+  it('explains which sources were tried', async () => {
+    await expect(resolveRelease(CATALOG.ryubing, () => json({}, false))).rejects.toThrow(/Ryubing\/Stable: no macOS build/);
   });
 });
