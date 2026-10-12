@@ -9,7 +9,9 @@ import { exists, writeFileAtomic } from '../util/fsx';
 import { CATALOG, hostAllowed } from './catalog';
 import { resolveRelease, type JsonFetch, type Release } from './resolve';
 
-export type StreamFetch = (url: string) => Promise<{ ok: boolean; status: number; url?: string; headers: { get(n: string): string | null }; body: ReadableStream<Uint8Array> | null }>;
+const STALL_MS = 60_000;
+
+export type StreamFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; url?: string; headers: { get(n: string): string | null }; body: ReadableStream<Uint8Array> | null }>;
 
 interface Managed {
   version: string;
@@ -106,7 +108,26 @@ export class Installer {
   /** Streams to disk while hashing. Re-checks the host after redirects. */
   private async download(url: string, dest: string, hosts: string[], progress: (received: number, total: number | null) => void): Promise<string> {
     if (!hostAllowed(url, hosts)) throw new Error('Refusing to download from an unexpected host.');
-    const res = await this.fetchStream(url);
+    // Abort if the server stops sending data for a while, rather than hanging forever.
+    const abort = new AbortController();
+    let stall: NodeJS.Timeout | undefined;
+    const armStall = (): void => {
+      clearTimeout(stall);
+      stall = setTimeout(() => abort.abort(), STALL_MS);
+    };
+    armStall();
+    try {
+      return await this.stream(url, dest, hosts, progress, abort.signal, armStall);
+    } catch (err) {
+      if (abort.signal.aborted) throw new Error(`The download stalled for ${STALL_MS / 1000} seconds. Check your connection and try again.`);
+      throw err;
+    } finally {
+      clearTimeout(stall);
+    }
+  }
+
+  private async stream(url: string, dest: string, hosts: string[], progress: (received: number, total: number | null) => void, signal: AbortSignal, onData: () => void): Promise<string> {
+    const res = await this.fetchStream(url, { signal });
     if (!res.ok || !res.body) throw new Error(`Download failed (${res.status}).`);
     if (res.url && !hostAllowed(res.url, hosts)) throw new Error('The download redirected to an unexpected host.');
     const total = Number(res.headers.get('content-length')) || null;
@@ -119,6 +140,7 @@ export class Installer {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        onData();
         hash.update(value);
         received += value.length;
         if (!out.write(value)) await new Promise<void>((r) => out.once('drain', () => r()));
