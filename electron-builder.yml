@@ -1,0 +1,21 @@
+appId: com.jnisenbo.arcadia
+productName: Arcadia
+directories:
+  output: dist
+files:
+  - out/**
+extraResources:
+  - from: native/build/arcadia-helper
+    to: bin/arcadia-helper
+mac:
+  target:
+    - target: dir
+      arch: [arm64]
+  category: public.app-category.games
+  # Ad-hoc signature: required for arm64, and keeps a stable-ish identity for
+  # privacy permissions (Bluetooth) between rebuilds. No notarization for personal use.
+  identity: "-"
+  hardenedRuntime: false
+  extendInfo:
+    NSBluetoothAlwaysUsageDescription: Arcadia pairs your wireless controller over Bluetooth.
+    LSApplicationCategoryType: public.app-category.games
