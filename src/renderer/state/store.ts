@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Settings, SettingsPatch } from '@shared/settings';
 import type { EmulatorId } from '@shared/platforms';
 import type { ControllerStatus, EmulatorStatus, Game, GameArt, InstallInfo, InstallProgress, PlayRecord, ScanProgress, SessionState } from '@shared/types';
+import { mergeSettings } from '@shared/merge';
 import { api } from '../api';
 import { setButtonLayout, setInputEnabled } from '../input/input';
 import { configureSfx } from '../sound/sfx';
@@ -75,10 +76,29 @@ export const useStore = create<State>((set, get) => ({
   openSettings: (section) => set({ screen: 'settings', settingsSection: section }),
   setFocusedGame: (focusedGameId) => set({ focusedGameId }),
 
+  /**
+   * Optimistic: the UI reflects the change immediately (so fast repeated
+   * presses read the new value), then main validates, saves and returns the
+   * authoritative settings.
+   */
   async updateSettings(patch) {
-    const settings = await api.invoke('settings:update', patch);
-    applySettings(settings);
-    set({ settings });
+    const current = get().settings;
+    if (current) {
+      const optimistic = mergeSettings(current, patch);
+      applySettings(optimistic);
+      set({ settings: optimistic });
+    }
+    try {
+      const settings = await api.invoke('settings:update', patch);
+      applySettings(settings);
+      set({ settings });
+    } catch (err) {
+      if (current) {
+        applySettings(current);
+        set({ settings: current });
+      }
+      get().toast({ level: 'error', title: 'Couldn’t save that setting', detail: (err as Error).message });
+    }
   },
 
   async refreshInstalls(checkLatest) {
@@ -105,7 +125,9 @@ export const useStore = create<State>((set, get) => ({
   async rescan() {
     const summary = await api.invoke('library:scan');
     const games = await api.invoke('library:list');
-    set({ games, focusedGameId: get().focusedGameId ?? games[0]?.id ?? null });
+    // Keep focus if the game still exists; otherwise let Home pick its first visible tile.
+    const focused = get().focusedGameId;
+    set({ games, focusedGameId: focused && games.some((g) => g.id === focused) ? focused : null });
     if (summary.errors.length) get().toast({ level: 'warn', title: `Some folders couldn't be read`, detail: summary.errors.slice(0, 3).join('\n') });
   },
 
@@ -153,7 +175,7 @@ export async function bootstrap(opts: { overlay?: boolean } = {}): Promise<void>
       const [games, art] = await Promise.all([api.invoke('library:list'), api.invoke('art:all')]);
       useStore.setState({ art });
       const { focusedGameId } = useStore.getState();
-      useStore.setState({ games, focusedGameId: games.some((g) => g.id === focusedGameId) ? focusedGameId : (games[0]?.id ?? null) });
+      useStore.setState({ games, focusedGameId: focusedGameId && games.some((g) => g.id === focusedGameId) ? focusedGameId : null });
     }
   });
   api.on('controller:status', (controller) => useStore.setState({ controller }));

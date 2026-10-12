@@ -95,7 +95,7 @@ export type SessionState =
   | { kind: 'idle' }
   | { kind: 'launching'; gameId: string; emulator: EmulatorId }
   | { kind: 'running'; gameId: string; emulator: EmulatorId; pid: number; startedAt: number }
-  | { kind: 'stopping'; gameId: string; emulator: EmulatorId }
+  | { kind: 'stopping'; gameId: string; emulator: EmulatorId; startedAt: number }
   | { kind: 'ended'; gameId: string; emulator: EmulatorId; exitCode: number | null; signal: string | null; error?: string; stderrTail?: string; playedMs: number };
 
 export interface LaunchResult {

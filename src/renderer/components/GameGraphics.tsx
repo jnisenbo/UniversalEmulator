@@ -8,9 +8,9 @@ import { useStore } from '../state/store';
 import { ButtonHints } from './ButtonHints';
 import { Modal } from './controller/Modal';
 import { adjustRow, RowView, type Row } from './settings/rows';
+import { ASPECT_LABEL, ASPECTS, RES_LABEL } from '../screens/settings/graphicsOptions';
 
-const ASPECT_LABEL: Record<Graphics['aspect'], string> = { auto: 'Auto', '16:9': '16:9', '4:3': '4:3', stretch: 'Stretch' };
-const ASPECTS = Object.keys(ASPECT_LABEL) as Graphics['aspect'][];
+const NO_OVERRIDE: Partial<Graphics> = {};
 
 /**
  * Per-game graphics: each setting is either "Default" (follows Settings →
@@ -21,7 +21,7 @@ export function GameGraphics({ game, title, onClose }: { game: Game; title: stri
   const updateSettings = useStore((s) => s.updateSettings);
   const [focus, setFocus] = useState(0);
   const key = gameKey(game);
-  const override = settings.gameGraphics[key] ?? {};
+  const override = settings.gameGraphics[key] ?? NO_OVERRIDE;
   const g = settings.graphics;
 
   const save = useCallback(
@@ -41,8 +41,8 @@ export function GameGraphics({ game, title, onClose }: { game: Game; title: stri
         kind: 'choice',
         id: 'res',
         label: 'Internal resolution',
-        detail: `Default follows Settings → Graphics (${g.resolutionScale === 1 ? 'Native' : `${g.resolutionScale}×`})`,
-        options: [{ label: 'Default' }, { label: 'Native' }, { label: '2×' }, { label: '3×' }, { label: '4×' }],
+        detail: `Default follows Settings → Graphics (${RES_LABEL[g.resolutionScale]})`,
+        options: [{ label: 'Default' }, ...RES_LABEL.slice(1).map((label) => ({ label }))],
         index: override.resolutionScale ?? 0,
         onChange: (i) => save({ ...override, resolutionScale: i === 0 ? undefined : i }),
       },

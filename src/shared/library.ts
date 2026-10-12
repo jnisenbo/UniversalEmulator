@@ -18,11 +18,8 @@ const byTitle = (a: Game, b: Game): number => a.displayTitle.localeCompare(b.dis
 export function arrangeLibrary(games: Game[], history: Record<string, PlayRecord>, sort: LibrarySort, filter: LibraryFilter): Game[] {
   const visible = filter === 'all' ? games : games.filter((g) => g.platform === filter);
   if (sort === 'title') return [...visible].sort(byTitle);
-  return [...visible].sort((a, b) => {
-    const la = history[gameKey(a)]?.lastPlayed ?? 0;
-    const lb = history[gameKey(b)]?.lastPlayed ?? 0;
-    return lb - la || byTitle(a, b);
-  });
+  const last = new Map(visible.map((g) => [g, history[gameKey(g)]?.lastPlayed ?? 0]));
+  return [...visible].sort((a, b) => last.get(b)! - last.get(a)! || byTitle(a, b));
 }
 
 export function formatPlayTime(ms: number): string {

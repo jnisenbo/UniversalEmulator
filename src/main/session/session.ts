@@ -104,14 +104,16 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
   /** Ask the emulator to quit (SIGTERM lets it flush saves), then force it. */
   quit(): void {
     if (this.state.kind !== 'running' || !this.child) return;
-    const { gameId, emulator } = this.state;
-    this.set({ kind: 'stopping', gameId, emulator });
+    const { gameId, emulator, startedAt } = this.state;
+    this.set({ kind: 'stopping', gameId, emulator, startedAt });
     this.child.kill('SIGTERM');
     this.killTimer = setTimeout(() => this.child?.kill('SIGKILL'), KILL_GRACE_MS);
   }
 
   /** On app quit: don't leave an orphaned emulator running. */
   dispose(): void {
+    // The 'exit' handler won't get to run during shutdown; stop treating this as a session.
+    this.state = { kind: 'idle' };
     this.child?.kill('SIGTERM');
     this.cleanup();
   }

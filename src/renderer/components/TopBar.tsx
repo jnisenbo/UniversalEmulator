@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Screen } from '../state/store';
 import { useStore } from '../state/store';
-import { ShoulderGlyph } from './Glyph';
+import { LayoutGlyph } from './ButtonHints';
 
 const TABS: { id: Screen; label: string }[] = [
   { id: 'home', label: 'Library' },
@@ -38,13 +38,13 @@ export function TopBar({ focusedTab }: { focusedTab: Screen | null }) {
     <header className="topbar">
       <div className="brand">Arcadia</div>
       <nav className="tabs">
-        <ShoulderGlyph side="L" />
+        <LayoutGlyph button="L" />
         {TABS.map((t) => (
           <span key={t.id} className="tab" data-active={screen === t.id} data-focused={focusedTab === t.id}>
             {t.label}
           </span>
         ))}
-        <ShoulderGlyph side="R" />
+        <LayoutGlyph button="R" />
       </nav>
       <div className="status">
         <Battery />

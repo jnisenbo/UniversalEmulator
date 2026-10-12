@@ -180,10 +180,16 @@ final class Pairer: NSObject, IOBluetoothDeviceInquiryDelegate, IOBluetoothDevic
         active = true
         deadline = Date().addingTimeInterval(TimeInterval(timeoutSec))
 
-        // Already paired before (e.g. via System Settings) → just connect.
-        if let known = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice])?.first(where: { Pairer.looksLikeController($0.name) }) {
-            emit(["event": "pair", "phase": "found", "name": known.name ?? "Controller"])
-            connect(known)
+        // A controller paired before (e.g. via System Settings) that is switched on
+        // reconnects without pairing again. If none does, search for one in
+        // pairing mode: that's how a second or replacement controller gets paired.
+        let known = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] ?? []).filter { Pairer.looksLikeController($0.name) }
+        if let connected = known.first(where: { $0.isConnected() }) {
+            finish("connected", name: connected.name)
+            return
+        }
+        for dev in known where dev.openConnection() == kIOReturnSuccess {
+            finish("connected", name: dev.name)
             return
         }
 
@@ -217,18 +223,11 @@ final class Pairer: NSObject, IOBluetoothDeviceInquiryDelegate, IOBluetoothDevic
         active = false
     }
 
+    /// A controller found by the search is in pairing mode: always pair it, even
+    /// if the Mac remembers it (its old link keys are discarded by the controller).
     private func connect(_ dev: IOBluetoothDevice) {
         device = dev
         emit(["event": "pair", "phase": "pairing", "name": dev.name ?? "Controller"])
-        if dev.isPaired() {
-            let r = dev.openConnection()
-            if r == kIOReturnSuccess || dev.isConnected() {
-                finish("connected", name: dev.name)
-            } else {
-                finish("failed", message: "Found the controller but couldn't connect (\(r)). Hold Create + Home again.")
-            }
-            return
-        }
         let p = IOBluetoothDevicePair(device: dev)!
         p.delegate = self
         pair = p

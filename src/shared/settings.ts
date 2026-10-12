@@ -25,22 +25,25 @@ export type ControllerProfile = z.infer<typeof ControllerProfileSchema>;
 
 const app = z.string().nullable().default(null);
 
-export const GraphicsSchema = z.object({
+/** Field shapes shared by the global settings and per-game overrides. */
+const graphicsFields = {
   /** Internal resolution as a multiple of the console's native output. */
-  resolutionScale: z.number().int().min(1).max(4).default(2),
-  vsync: z.boolean().default(true),
-  aspect: z.enum(['auto', '16:9', '4:3', 'stretch']).default('auto'),
-  showFps: z.boolean().default(false),
+  resolutionScale: z.number().int().min(1).max(4),
+  vsync: z.boolean(),
+  aspect: z.enum(['auto', '16:9', '4:3', 'stretch']),
+  showFps: z.boolean(),
+};
+
+export const GraphicsSchema = z.object({
+  resolutionScale: graphicsFields.resolutionScale.default(2),
+  vsync: graphicsFields.vsync.default(true),
+  aspect: graphicsFields.aspect.default('auto'),
+  showFps: graphicsFields.showFps.default(false),
 });
 export type Graphics = z.infer<typeof GraphicsSchema>;
 
 /** Per-game override: only the fields set for that game, no defaults filled in. */
-export const GraphicsOverrideSchema = z.object({
-  resolutionScale: z.number().int().min(1).max(4).optional(),
-  vsync: z.boolean().optional(),
-  aspect: z.enum(['auto', '16:9', '4:3', 'stretch']).optional(),
-  showFps: z.boolean().optional(),
-});
+export const GraphicsOverrideSchema = z.object(graphicsFields).partial();
 
 export const SettingsSchema = z.object({
   version: z.literal(1).default(1),

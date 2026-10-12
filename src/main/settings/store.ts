@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { SettingsSchema, type Settings, type SettingsPatch } from '@shared/settings';
+import { mergeSettings } from '@shared/merge';
 import { writeFileAtomic } from '../util/fsx';
 
 /** Settings live in a JSON file under the app's userData folder. */
@@ -45,20 +46,5 @@ export class SettingsStore {
   }
 }
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-/** Map-like settings whose keys come and go: a patch replaces them whole. */
-const REPLACE_WHOLE = new Set(['layout', 'gameGraphics']);
-
-/** Deep merge for plain objects; arrays, scalars and REPLACE_WHOLE keys replace. */
-export function mergeOneLevel<T>(base: T, patch: unknown): T {
-  if (!isPlainObject(base) || !isPlainObject(patch)) return (patch === undefined ? base : patch) as T;
-  const out: Record<string, unknown> = { ...base };
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === undefined) continue;
-    out[k] = isPlainObject(v) && isPlainObject(out[k]) && !REPLACE_WHOLE.has(k) ? mergeOneLevel(out[k], v) : v;
-  }
-  return out as T;
-}
+/** Kept as a named export for tests and callers; the logic is shared with the renderer. */
+export const mergeOneLevel = mergeSettings;

@@ -17,7 +17,9 @@ export function groupDiscs(games: Game[]): Game[] {
       continue;
     }
     const key = `${g.platform}|${g.gameId}`;
-    groups.set(key, [...(groups.get(key) ?? []), g]);
+    const group = groups.get(key);
+    if (group) group.push(g);
+    else groups.set(key, [g]);
   }
   for (const group of groups.values()) {
     const byDisc = new Map<number, Game>();

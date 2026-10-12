@@ -239,7 +239,10 @@ function wire(): void {
     if (state.kind === 'ended') {
       const game = games.find((g) => g.id === state.gameId);
       if (game) {
-        void history.record(game, state.playedMs).then((record) => record && send('history:updated', { key: gameKey(game), record }));
+        history
+          .record(game, state.playedMs)
+          .then((record) => record && send('history:updated', { key: gameKey(game), record }))
+          .catch((err: unknown) => console.error('[history] could not save play time:', err));
       }
       overlay.close();
       if (win) void restoreFocus(win);
@@ -454,6 +457,19 @@ app.whenReady().then(async () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  // Quitting Arcadia mid-game still counts the session toward play history.
+  const current = session.current;
+  if (current.kind === 'running' || current.kind === 'stopping') {
+    const game = games.find((g) => g.id === current.gameId);
+    const { startedAt } = current;
+    if (game) {
+      try {
+        history.recordSync(game, Date.now() - startedAt);
+      } catch (err) {
+        console.error('[history] could not save play time on quit:', err);
+      }
+    }
+  }
   session.dispose();
   helper.stop();
   overlay.destroy();

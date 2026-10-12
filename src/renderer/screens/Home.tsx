@@ -14,7 +14,7 @@ import { HeroBackground } from '../components/HeroBackground';
 import { LaunchOverlay, type LaunchOrigin } from '../components/LaunchOverlay';
 import { TopBar } from '../components/TopBar';
 import { GameGraphics } from '../components/GameGraphics';
-import { TriggerGlyph } from '../components/Glyph';
+import { LayoutGlyph } from '../components/ButtonHints';
 import { arrangeLibrary, formatLastPlayed, formatPlayTime, gameKey, type LibraryFilter } from '@shared/library';
 import { ActionMenu, type MenuItem } from '../components/ActionMenu';
 import { SetupChecklist, useSetupSteps } from '../components/SetupChecklist';
@@ -141,8 +141,10 @@ export function Home() {
         case 'filterPrev':
         case 'filterNext': {
           if (e.kind !== 'press' || filters.length < 2) return true;
-          const at = Math.max(0, filters.indexOf(filter));
-          const next = filters[(at + (e.action === 'filterNext' ? 1 : -1) + filters.length) % filters.length]!;
+          const current = useStore.getState().settings?.ui.filter ?? 'all';
+          const at = filters.indexOf(current);
+          // A saved filter for a console that's no longer in the library steps back to All.
+          const next = at === -1 ? 'all' : filters[(at + (e.action === 'filterNext' ? 1 : -1) + filters.length) % filters.length]!;
           play('tab');
           setZone('row');
           void updateSettings({ ui: { filter: next } });
@@ -227,11 +229,11 @@ export function Home() {
         },
       },
       { label: 'Refresh artwork', disabled: !hasKey, run: () => void api.invoke('art:refresh', { gameId: game.id }).catch(artError) },
-      {
+      ...(game.emulator === 'xenia' ? [] : [{
         label: 'Graphics for this game…',
         detail: settings?.gameGraphics[gameKey(game)] ? 'Custom settings' : 'Uses your default graphics settings',
         run: () => setMenu({ kind: 'graphics' }),
-      },
+      }]),
       { label: 'Show in Finder', detail: game.discPaths ? `${game.discPaths.length} discs · ${game.path}` : game.path, run: () => void api.invoke('game:reveal', { gameId: game.id }) },
     ];
   }
@@ -243,13 +245,13 @@ export function Home() {
 
       {filters.length > 1 && (
         <div className="filters" aria-label="Filter by console">
-          <TriggerGlyph side="L" />
+          <LayoutGlyph button="LT" />
           {filters.map((f) => (
             <span key={f} className="filter" data-active={f === filter}>
               {f === 'all' ? 'All' : PLATFORM_INFO[f].label}
             </span>
           ))}
-          <TriggerGlyph side="R" />
+          <LayoutGlyph button="RT" />
         </div>
       )}
 
@@ -313,7 +315,7 @@ export function Home() {
 
       <ButtonHints
         hints={[
-          { button: 'south', label: zone === 'tabs' ? 'Open' : games.length ? 'Play' : 'Set up' },
+          ...(zone === 'tabs' || games.length || allGames.length === 0 ? [{ button: 'south' as const, label: zone === 'tabs' ? 'Open' : games.length ? 'Play' : 'Set up' }] : []),
           ...(games.length && zone !== 'tabs' ? [{ button: 'menu' as const, label: 'Options' }] : []),
           ...(filters.length > 1 ? [{ button: 'RT' as const, label: 'Filter' }] : []),
           ...(zone !== 'row' ? [{ button: 'east' as const, label: 'Back' }] : []),

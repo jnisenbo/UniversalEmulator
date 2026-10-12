@@ -13,6 +13,7 @@ import { PairWizard } from '../components/controller/PairWizard';
 import { Calibration } from '../components/controller/Calibration';
 import { ButtonLayout } from '../components/controller/ButtonLayout';
 import { emulatorRows, isInstalling, shortPath } from './settings/emulators';
+import { ASPECT_LABEL, ASPECTS, RES_LABEL } from './settings/graphicsOptions';
 
 type SectionId = 'emulators' | 'library' | 'controller' | 'graphics' | 'artwork' | 'interface' | 'system';
 const SECTIONS: { id: SectionId; label: string }[] = [
@@ -36,9 +37,6 @@ const LIGHT_COLORS = [
   { label: 'Off', rgb: { r: 0, g: 0, b: 0 } },
 ];
 
-const ASPECTS = ['auto', '16:9', '4:3', 'stretch'] as const;
-const ASPECT_LABEL = { auto: 'Auto', '16:9': '16:9', '4:3': '4:3', stretch: 'Stretch' } as const;
-const RES_LABEL = ['', 'Native', '2×', '3×', '4×'];
 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 

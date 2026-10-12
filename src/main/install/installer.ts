@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { EmulatorId } from '@shared/platforms';
 import type { InstallProgress } from '@shared/types';
@@ -125,6 +125,13 @@ export class Installer {
     await mkdir(this.appsDir, { recursive: true });
     const dest = join(this.appsDir, basename(appSrc));
     const previous = this.managed[id];
+    // Picking the copy that's already installed: nothing to copy (and deleting
+    // the destination first would delete the source).
+    if ((await realpath(appSrc).catch(() => appSrc)) === (await realpath(dest).catch(() => dest))) {
+      this.managed[id] = { version: previous?.version ?? (await bundleVersion(dest)), path: dest, installedAt: Date.now(), source };
+      await writeFileAtomic(this.indexFile, JSON.stringify(this.managed, null, 2));
+      return dest;
+    }
     if ((await exists(dest)) && previous?.path !== dest) {
       throw new Error(`${dest} already exists and wasn't installed by Arcadia. Use “Choose an installed copy” instead.`);
     }
@@ -132,8 +139,7 @@ export class Installer {
     // ditto preserves symlinks, permissions and code signatures inside the bundle.
     const copy = await run('/usr/bin/ditto', [appSrc, dest], 300_000);
     if (copy.code !== 0) throw new Error(`Copy failed: ${copy.stderr.trim()}`);
-    const plist = await run('/usr/bin/defaults', ['read', join(dest, 'Contents', 'Info'), 'CFBundleShortVersionString']);
-    this.managed[id] = { version: version ?? (plist.code === 0 ? plist.stdout.trim() : 'unknown'), path: dest, installedAt: Date.now(), source };
+    this.managed[id] = { version: version ?? (await bundleVersion(dest)), path: dest, installedAt: Date.now(), source };
     await writeFileAtomic(this.indexFile, JSON.stringify(this.managed, null, 2));
     return dest;
   }
@@ -215,6 +221,11 @@ export class Installer {
     if (r.code !== 0) throw new Error(`Couldn't unpack the download: ${r.stderr.trim()}`);
     return findApp(into, appName);
   }
+}
+
+async function bundleVersion(app: string): Promise<string> {
+  const r = await run('/usr/bin/defaults', ['read', join(app, 'Contents', 'Info'), 'CFBundleShortVersionString']);
+  return r.code === 0 ? r.stdout.trim() : 'unknown';
 }
 
 /** Breadth-first search for the .app, a few levels deep. */

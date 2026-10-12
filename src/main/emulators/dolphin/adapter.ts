@@ -10,7 +10,9 @@ import { applyDolphinIni, applyGfxIni, gcPadIni, wiimoteIni } from './config';
 /** Folders shared with the user's normal Dolphin setup so saves stay in one place. */
 const SHARED_DIRS = ['GC', 'Wii', 'StateSaves', 'Load', 'ScreenShots'];
 
-const playlistPath = (game: Game, managedDir: string): string => join(managedDir, 'Playlists', `${game.gameId ?? game.id}.m3u`);
+/** Disc IDs come from file headers; keep only safe characters for the file name. */
+const playlistPath = (game: Game, managedDir: string): string =>
+  join(managedDir, 'Playlists', `${(game.gameId ?? game.id).replace(/[^A-Za-z0-9]/g, '_')}.m3u`);
 
 const defaultDataDir = (home: string): string => join(home, 'Library', 'Application Support', 'Dolphin');
 
