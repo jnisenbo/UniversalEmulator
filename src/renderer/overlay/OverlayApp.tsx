@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { EMULATOR_LABEL, PLATFORM_INFO } from '@shared/platforms';
 import { api } from '../api';
 import { placeholderArt } from '../art/placeholder';
+import { gameName } from '../art/name';
 import { injectAction } from '../input/input';
 import { useInputHandler } from '../input/useInput';
 import type { InputEvent } from '../input/actions';
@@ -91,7 +92,7 @@ export function OverlayApp() {
           <div className="ov-game">
             <div className="ov-cover" style={{ background: cover }} />
             <div>
-              <div className="ov-title">{game.displayTitle}</div>
+              <div className="ov-title">{gameName(game, artMap[game.id])}</div>
               <div className="ov-meta">
                 {[PLATFORM_INFO[game.platform].label, EMULATOR_LABEL[game.emulator], played].filter(Boolean).join('  ·  ')}
               </div>

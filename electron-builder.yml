@@ -8,6 +8,7 @@ extraResources:
   - from: native/build/arcadia-helper
     to: bin/arcadia-helper
 mac:
+  icon: build/icon.png
   target:
     - target: dir
       arch: [arm64]

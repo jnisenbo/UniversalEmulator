@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a3b8f"/>
+      <stop offset="0.55" stop-color="#5b2a91"/>
+      <stop offset="1" stop-color="#14112a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.3" cy="0.22" r="0.75">
+      <stop offset="0" stop-color="#8fb4ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8fb4ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfd8ff"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: 824px squircle centred on a 1024 canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#glow)"/>
+  <!-- An arch (Arcadia) over a row of four tiles -->
+  <path d="M312 560 V500 a200 200 0 0 1 400 0 V560" fill="none" stroke="url(#arch)" stroke-width="64" stroke-linecap="round"/>
+  <g fill="#ffffff">
+    <rect x="276" y="628" width="104" height="104" rx="26" opacity="0.95"/>
+    <rect x="404" y="628" width="104" height="104" rx="26" opacity="0.7"/>
+    <rect x="532" y="628" width="104" height="104" rx="26" opacity="0.5"/>
+    <rect x="660" y="628" width="104" height="104" rx="26" opacity="0.32"/>
+  </g>
+</svg>

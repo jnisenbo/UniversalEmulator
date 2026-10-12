@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EMULATOR_LABEL, PLATFORM_INFO } from '@shared/platforms';
 import { api } from '../api';
 import { placeholderArt } from '../art/placeholder';
+import { gameName } from '../art/name';
 import { project } from '../engine/spring';
 import { useInputHandler } from '../input/useInput';
 import type { InputEvent } from '../input/actions';
@@ -231,7 +232,7 @@ export function Home() {
                 <img className="hero-logo" src={gameArt.logo} alt={game.displayTitle} draggable={false} />
               </h1>
             ) : (
-              <h1 className="hero-title">{game.displayTitle}</h1>
+              <h1 className="hero-title">{gameName(game, gameArt)}</h1>
             )}
             {game.note && <p className="hero-note">{game.note}</p>}
             <div className="hero-meta">
@@ -262,7 +263,7 @@ export function Home() {
       />
 
       <LaunchOverlay origin={origin} session={session} onClosed={() => setOrigin(null)} />
-      {menu?.kind === 'options' && game && <ActionMenu title={game.displayTitle} items={gameMenu()} onClose={() => setMenu(null)} />}
+      {menu?.kind === 'options' && game && <ActionMenu title={gameName(game, gameArt)} items={gameMenu()} onClose={() => setMenu(null)} />}
       {menu?.kind === 'art' && game && (
         <ActionMenu
           title="Choose artwork"
