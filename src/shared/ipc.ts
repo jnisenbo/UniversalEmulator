@@ -42,6 +42,7 @@ export interface IpcRequests {
   'app:quit': { req: void; res: void };
   'history:all': { req: void; res: Record<string, PlayRecord> };
   'art:all': { req: void; res: Record<string, GameArt> };
+  'art:fetchMissing': { req: void; res: void };
   'art:refresh': { req: { gameId: string; sourceId?: number }; res: GameArt | null };
   'art:search': { req: { gameId: string; term?: string }; res: ArtSearchResult[] };
   'game:reveal': { req: { gameId: string }; res: void };
@@ -90,6 +91,7 @@ export const REQUEST_CHANNELS = [
   'app:quit',
   'history:all',
   'art:all',
+  'art:fetchMissing',
   'art:refresh',
   'art:search',
   'game:reveal',

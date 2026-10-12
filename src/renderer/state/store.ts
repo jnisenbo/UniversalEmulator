@@ -25,6 +25,8 @@ interface State {
   games: Game[];
   focusedGameId: string | null;
   session: SessionState;
+  /** Increments every time a game session ends (states can arrive faster than renders). */
+  sessionEpoch: number;
   scan: ScanProgress | null;
   emulators: EmulatorStatus[];
   controller: ControllerStatus;
@@ -63,6 +65,7 @@ export const useStore = create<State>((set, get) => ({
   games: [],
   focusedGameId: null,
   session: { kind: 'idle' },
+  sessionEpoch: 0,
   scan: null,
   emulators: [],
   controller: { helper: 'unavailable', controllers: [] },
@@ -162,7 +165,7 @@ export async function bootstrap(opts: { overlay?: boolean } = {}): Promise<void>
   void useStore.getState().refreshEmulators();
 
   api.on('session:state', (s) => {
-    useStore.setState({ session: s });
+    useStore.setState({ session: s, ...(s.kind === 'ended' ? { sessionEpoch: useStore.getState().sessionEpoch + 1 } : {}) });
     // The launcher ignores the controller while a game has it (the in-game menu doesn't).
     if (!opts.overlay) setInputEnabled(s.kind === 'idle' || s.kind === 'ended');
     if (s.kind === 'ended' && s.error && !opts.overlay) {

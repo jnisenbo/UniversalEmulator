@@ -8,6 +8,8 @@ interface CacheEntry {
   mtimeMs: number;
   /** null = probed and not a game (e.g. an STFS save) so it isn't re-read. */
   game: Game | null;
+  /** For probes that depend on outside input (Switch keys): what they were read with. */
+  probeTag?: string;
 }
 
 interface CacheFile {
@@ -33,9 +35,9 @@ export class LibraryCache {
     }
   }
 
-  lookup(path: string, size: number, mtimeMs: number): CacheEntry | undefined {
+  lookup(path: string, size: number, mtimeMs: number, probeTag?: string): CacheEntry | undefined {
     const e = this.entries.get(path);
-    return e && e.size === size && e.mtimeMs === mtimeMs ? e : undefined;
+    return e && e.size === size && e.mtimeMs === mtimeMs && e.probeTag === probeTag ? e : undefined;
   }
 
   replaceAll(entries: Map<string, CacheEntry>): void {

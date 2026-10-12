@@ -1,7 +1,7 @@
 /** Map-like settings whose keys come and go: a patch replaces them whole. */
 const REPLACE_WHOLE = new Set(['layout', 'gameGraphics']);
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 

@@ -82,24 +82,24 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
     window.addEventListener('resize', measure);
 
     const tilePx = (): number => TILE_REM * remPx.current;
-    let lastKey = '';
     let lastGames: unknown = null;
+    let lastRem = 0;
+    let wasMoving = true;
     const stop = onFrame('animate', (dt) => {
       const s = scroll.current;
-      s.step(dt);
-      let x = 0;
-      let key = `${s.value.toFixed(2)}`;
-      const growExtra = (FOCUS_SCALE - 1) * tilePx();
-      for (let i = 0; i < grow.current.length; i++) {
-        const g = grow.current[i]!;
-        g.step(dt);
-        key += `|${g.value.toFixed(3)}`;
-      }
-      // A new list (filter, re-sort, rescan) needs every tile placed again even if
-      // no spring moved; the tile elements behind each index have changed.
-      if (key === lastKey && gamesRef.current === lastGames) return;
+      // Nothing to do once every spring has settled, unless the list or size
+      // changed (a filter, re-sort, rescan or resize needs every tile placed
+      // again even if no spring moved). Keeps the hidden launcher idle in games.
+      const listChanged = gamesRef.current !== lastGames || remPx.current !== lastRem;
+      const moving = !s.settled || grow.current.some((g) => !g.settled);
+      if (!moving && !wasMoving && !listChanged) return;
+      wasMoving = moving;
       lastGames = gamesRef.current;
-      lastKey = key;
+      lastRem = remPx.current;
+      s.step(dt);
+      for (const g of grow.current) g.step(dt);
+      let x = 0;
+      const growExtra = (FOCUS_SCALE - 1) * tilePx();
       // Tiles before the focused one are offset by their own growth only, so the
       // focused tile stays anchored at the left and neighbours make room.
       for (let i = 0; i < grow.current.length; i++) {

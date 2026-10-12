@@ -18,6 +18,7 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
   private state: SessionState = { kind: 'idle' };
   private child: ChildProcess | null = null;
   private killTimer: NodeJS.Timeout | null = null;
+  private cancelLaunch = false;
 
   get current(): SessionState {
     return this.state;
@@ -35,6 +36,7 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
   async launch(game: Game, adapter: EmulatorAdapter, ctx: AdapterContext, profile: ControllerProfile): Promise<LaunchResult> {
     if (this.isActive) return { ok: false, error: 'A game is already running.', warnings: [] };
     const base = { gameId: game.id, emulator: adapter.id };
+    this.cancelLaunch = false;
     this.set({ kind: 'launching', ...base });
 
     const fail = (error: string): LaunchResult => {
@@ -59,6 +61,11 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
     } catch (err) {
       return fail((err as Error).message);
     }
+    // Quit requested (or Arcadia shutting down) while we were preparing: don't start it.
+    if (this.cancelLaunch) {
+      this.cancelLaunch = false;
+      return fail('Launch cancelled.');
+    }
 
     let stderrTail = '';
     const startedAt = Date.now();
@@ -77,6 +84,11 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
       child.once('spawn', () => {
         this.set({ kind: 'running', ...base, pid: child.pid ?? -1, startedAt });
         resolve({ ok: true, warnings });
+        // A quit requested while the process was starting.
+        if (this.cancelLaunch) {
+          this.cancelLaunch = false;
+          this.quit();
+        }
       });
       child.once('error', (err) => {
         // ENOENT / EACCES / Gatekeeper refusal surface here, before 'spawn'.
@@ -87,14 +99,17 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
         if (this.state.kind !== 'running' && this.state.kind !== 'stopping') return;
         const userStopped = this.state.kind === 'stopping';
         this.cleanup();
-        const crashed = !userStopped && code !== 0 && code !== null;
+        // A signal the user didn't ask for (SIGSEGV, SIGABRT, a kill by macOS) is a crash too.
+        const crashed = !userStopped && ((code !== null && code !== 0) || signal !== null);
         this.set({
           kind: 'ended',
           ...base,
           exitCode: code,
           signal,
           playedMs: Date.now() - startedAt,
-          ...(crashed ? { error: `${adapter.id} exited with code ${code}.`, stderrTail: lastLines(stderrTail, 12) } : {}),
+          ...(crashed
+            ? { error: signal ? `${adapter.id} crashed (${signal}).` : `${adapter.id} exited with code ${code}.`, stderrTail: lastLines(stderrTail, 12) }
+            : {}),
         });
         this.set({ kind: 'idle' });
       });
@@ -103,6 +118,10 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
 
   /** Ask the emulator to quit (SIGTERM lets it flush saves), then force it. */
   quit(): void {
+    if (this.state.kind === 'launching') {
+      this.cancelLaunch = true;
+      return;
+    }
     if (this.state.kind !== 'running' || !this.child) return;
     const { gameId, emulator, startedAt } = this.state;
     this.set({ kind: 'stopping', gameId, emulator, startedAt });
@@ -113,6 +132,7 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
   /** On app quit: don't leave an orphaned emulator running. */
   dispose(): void {
     // The 'exit' handler won't get to run during shutdown; stop treating this as a session.
+    if (this.state.kind === 'launching') this.cancelLaunch = true;
     this.state = { kind: 'idle' };
     this.child?.kill('SIGTERM');
     this.cleanup();

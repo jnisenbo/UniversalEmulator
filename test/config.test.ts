@@ -4,7 +4,7 @@ import { applyDolphinIni, gcPadIni, wiimoteIni } from '../src/main/emulators/dol
 import { patchRyubingConfig } from '../src/main/emulators/ryubing/config';
 import { expandArgs } from '../src/main/emulators/xenia/adapter';
 import { titleFromPath } from '../src/main/library/title';
-import { mergeOneLevel } from '../src/main/settings/store';
+import { mergeSettings as mergeOneLevel } from '../src/shared/merge';
 import { parseIni, stringifyIni } from '../src/main/util/ini';
 
 const profile = ControllerProfileSchema.parse({ deadzoneLeft: 0.12 });

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, realpath, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { PLATFORM_INFO } from '@shared/platforms';
 import type { Game, GameIdentity, ScanProgress, ScanSummary } from '@shared/types';
@@ -19,7 +19,20 @@ interface Candidate {
   mtimeMs: number;
 }
 
-async function walk(root: string, out: Candidate[], errors: string[], depth = 0): Promise<void> {
+interface WalkState {
+  /** Real folder path → shallowest depth it was walked at. */
+  dirs: Map<string, number>;
+  /** Real paths of files already listed (a symlink and its target are one game). */
+  files: Set<string>;
+}
+
+async function walk(root: string, out: Candidate[], errors: string[], depth: number, seen: WalkState): Promise<void> {
+  // Libraries often symlink folders on external drives; follow links, but don't
+  // walk the same real folder twice unless this visit is shallower (it can go deeper).
+  const real = await realpath(root).catch(() => root);
+  const before = seen.dirs.get(real);
+  if (before !== undefined && before <= depth) return;
+  seen.dirs.set(real, depth);
   let entries;
   try {
     entries = await readdir(root, { withFileTypes: true });
@@ -30,12 +43,22 @@ async function walk(root: string, out: Candidate[], errors: string[], depth = 0)
   for (const e of entries) {
     if (e.name.startsWith('.')) continue;
     const full = join(root, e.name);
-    if (e.isDirectory()) {
-      if (depth < MAX_DEPTH && !e.name.endsWith('.app')) await walk(full, out, errors, depth + 1);
-    } else if (e.isFile() && isCandidate(e.name)) {
+    let isDir = e.isDirectory();
+    let isFile = e.isFile();
+    if (e.isSymbolicLink()) {
+      const target = await stat(full).catch(() => null);
+      isDir = !!target?.isDirectory();
+      isFile = !!target?.isFile();
+    }
+    if (isDir) {
+      if (depth < MAX_DEPTH && !e.name.endsWith('.app')) await walk(full, out, errors, depth + 1, seen);
+    } else if (isFile && isCandidate(e.name)) {
       try {
         const s = await stat(full);
         if (!e.name.includes('.') && s.size < MIN_STFS_SIZE) continue;
+        const realFile = await realpath(full).catch(() => full);
+        if (seen.files.has(realFile)) continue;
+        seen.files.add(realFile);
         out.push({ path: full, size: s.size, mtimeMs: s.mtimeMs });
       } catch {
         /* vanished mid-scan */
@@ -70,8 +93,10 @@ export async function scanLibrary(
   const errors: string[] = [];
   const candidates: Candidate[] = [];
   onProgress({ phase: 'walking', scanned: 0, total: 0 });
-  for (const f of folders) await walk(f, candidates, errors);
+  const seen: WalkState = { dirs: new Map(), files: new Set() };
+  for (const f of folders) await walk(f, candidates, errors, 0, seen);
 
+  const switchTag = ctx.switchHeaderKey ? createHash('sha256').update(ctx.switchHeaderKey).digest('hex').slice(0, 12) : 'no-keys';
   const before = cache.paths();
   const next = new Map<string, CacheEntry>();
   let scanned = 0;
@@ -80,17 +105,19 @@ export async function scanLibrary(
   const queue = [...candidates];
   const worker = async (): Promise<void> => {
     for (let c = queue.shift(); c; c = queue.shift()) {
-      const hit = cache.lookup(c.path, c.size, c.mtimeMs);
+      // Switch results depend on the user's keys: re-probe when the keys change.
+      const probeTag = /\.(nsp|xci)$/i.test(c.path) ? switchTag : undefined;
+      const hit = cache.lookup(c.path, c.size, c.mtimeMs, probeTag);
       let entry: CacheEntry;
       if (hit) {
         entry = hit;
       } else {
         try {
           const identity = await probeFile(c.path, ctx);
-          entry = { size: c.size, mtimeMs: c.mtimeMs, game: identity ? toGame(c, identity) : null };
+          entry = { size: c.size, mtimeMs: c.mtimeMs, game: identity ? toGame(c, identity) : null, ...(probeTag ? { probeTag } : {}) };
         } catch (err) {
           errors.push(`${c.path}: ${(err as Error).message}`);
-          entry = { size: c.size, mtimeMs: c.mtimeMs, game: null };
+          entry = { size: c.size, mtimeMs: c.mtimeMs, game: null, ...(probeTag ? { probeTag } : {}) };
         }
       }
       if (entry.game && !listable(entry.game)) entry = { ...entry, game: null };

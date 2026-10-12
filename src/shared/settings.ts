@@ -86,7 +86,7 @@ export const SettingsSchema = z.object({
 
 export type Settings = z.infer<typeof SettingsSchema>;
 
-/** One level deep: top-level keys, and the fields of nested objects. */
+/** A partial settings object; nested objects merge, arrays and map-like fields (button layout, per-game graphics) replace. */
 export type SettingsPatch = {
   [K in keyof Settings]?: Settings[K] extends unknown[] | string | number | boolean | null
     ? Settings[K]

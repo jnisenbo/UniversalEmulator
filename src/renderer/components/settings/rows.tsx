@@ -5,7 +5,8 @@ export type Row =
   | { kind: 'toggle'; id: string; label: string; detail?: string; value: boolean; onChange(v: boolean): void }
   | { kind: 'slider'; id: string; label: string; detail?: string; value: number; min: number; max: number; step: number; format(v: number): string; onChange(v: number): void }
   | { kind: 'choice'; id: string; label: string; detail?: string; options: { label: string; swatch?: string }[]; index: number; onChange(i: number): void }
-  | { kind: 'text'; id: string; label: string; detail?: string; value: string; onCommit(v: string): void }
+  /** `value` is what's shown; `editValue` (default: value) is what editing starts from. Unchanged edits aren't committed. */
+  | { kind: 'text'; id: string; label: string; detail?: string; value: string; editValue?: string; onCommit(v: string): void }
   | { kind: 'info'; id: string; label: string; detail?: string; level?: 'ok' | 'warn' | 'error' };
 
 export const isFocusable = (r: Row): boolean => r.kind !== 'info';
@@ -68,12 +69,13 @@ export function RowView({ row, focused, editing, onEditDone, onPointerConfirm }:
 }
 
 function TextValue({ row, editing, onDone }: { row: Extract<Row, { kind: 'text' }>; editing: boolean; onDone(): void }) {
-  const [draft, setDraft] = useState(row.value);
+  const initial = row.editValue ?? row.value;
+  const [draft, setDraft] = useState(initial);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    setDraft(row.value);
+    setDraft(initial);
     if (editing) requestAnimationFrame(() => input.current?.select());
-  }, [editing, row.value]);
+  }, [editing, initial]);
   if (!editing) return <span className="srow-value mono">{row.value}</span>;
   return (
     <input
@@ -86,7 +88,7 @@ function TextValue({ row, editing, onDone }: { row: Extract<Row, { kind: 'text' 
           // Keep Enter/Escape from also reaching the global controller/keyboard input.
           e.stopPropagation();
           e.preventDefault();
-          if (e.key === 'Enter') row.onCommit(draft.trim());
+          if (e.key === 'Enter' && draft.trim() !== initial.trim()) row.onCommit(draft.trim());
           onDone();
         }
       }}

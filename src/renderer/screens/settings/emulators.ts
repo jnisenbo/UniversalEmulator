@@ -1,6 +1,7 @@
 import { EMULATOR_IDS, EMULATOR_LABEL, PLATFORM_INFO, PLATFORMS, type EmulatorId } from '@shared/platforms';
 import type { Settings } from '@shared/settings';
 import type { EmulatorStatus, InstallInfo, InstallProgress } from '@shared/types';
+import { isNewer } from '@shared/version';
 import type { Row } from '../../components/settings/rows';
 
 const PHASE_LABEL: Record<InstallProgress['phase'], string> = {
@@ -52,7 +53,7 @@ export function emulatorRows(opts: {
     const info = installs.find((x) => x.id === id);
     const p = progress[id];
     const path = settings.emulators[id].appPath;
-    const update = info?.managedVersion && info.latestVersion && info.latestVersion !== info.managedVersion ? info.latestVersion : null;
+    const update = info?.managedVersion && info.latestVersion && isNewer(info.latestVersion, info.managedVersion) ? info.latestVersion : null;
     let value: string;
     let fraction: number | undefined;
     if (isInstalling(p)) {

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ArtSearchResult, Game, GameArt } from '@shared/types';
 import { writeFileAtomic } from '../util/fsx';
@@ -82,8 +82,25 @@ export class ArtStore {
     return !!e.notFound && now - e.fetchedAt > RETRY_NOT_FOUND_MS;
   }
 
-  /** Find and download art. `sourceId` forces a specific SteamGridDB game (manual match). */
-  async fetch(game: Game, client: SteamGridDbClient, sourceId?: number): Promise<GameArt | null> {
+  private inflight = new Map<string, Promise<unknown>>();
+  private stagingCounter = 0;
+
+  /**
+   * Find and download art. `sourceId` forces a specific SteamGridDB game (manual
+   * match). Fetches for the same game run one after another, never interleaved.
+   */
+  fetch(game: Game, client: SteamGridDbClient, sourceId?: number): Promise<GameArt | null> {
+    const key = artKey(game);
+    const previous = this.inflight.get(key) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(() => this.fetchNow(game, client, sourceId));
+    this.inflight.set(key, next);
+    void next.finally(() => {
+      if (this.inflight.get(key) === next) this.inflight.delete(key);
+    }).catch(() => undefined);
+    return next;
+  }
+
+  private async fetchNow(game: Game, client: SteamGridDbClient, sourceId?: number): Promise<GameArt | null> {
     const key = artKey(game);
     let match: ArtSearchResult | undefined;
     if (sourceId !== undefined) match = { id: sourceId, name: game.displayTitle, year: null };
@@ -95,18 +112,28 @@ export class ArtStore {
       return null;
     }
 
+    // Download into a staging folder; the current art is replaced only once
+    // everything arrived, so a failed or interrupted fetch keeps what was there.
     const folder = join(this.dir, key);
-    await rm(folder, { recursive: true, force: true });
-    await mkdir(folder, { recursive: true });
+    const staging = join(this.dir, `${key}.incoming-${process.pid}-${++this.stagingCounter}`);
+    await rm(staging, { recursive: true, force: true });
+    await mkdir(staging, { recursive: true });
     const files: Entry['files'] = {};
-    for (const kind of KINDS) {
-      const asset = await client.asset(match.id, kind);
-      if (!asset) continue;
-      const { data, ext } = await client.download(asset.url);
-      const name = `${kind}.${ext}`;
-      await writeFile(join(folder, name), data);
-      files[kind] = name;
+    try {
+      for (const kind of KINDS) {
+        const asset = await client.asset(match.id, kind);
+        if (!asset) continue;
+        const { data, ext } = await client.download(asset.url);
+        const name = `${kind}.${ext}`;
+        await writeFile(join(staging, name), data);
+        files[kind] = name;
+      }
+    } catch (err) {
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+      throw err;
     }
+    await rm(folder, { recursive: true, force: true });
+    await rename(staging, folder);
     this.index.set(key, { sourceId: match.id, sourceName: match.name, files, fetchedAt: Date.now(), ...(Object.keys(files).length ? {} : { notFound: true }) });
     await this.save();
     return this.artFor(game);

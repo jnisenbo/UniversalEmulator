@@ -12,6 +12,7 @@ import { adjustRow, isFocusable, RowView, type Row } from '../components/setting
 import { PairWizard } from '../components/controller/PairWizard';
 import { Calibration } from '../components/controller/Calibration';
 import { ButtonLayout } from '../components/controller/ButtonLayout';
+import { isNewer } from '@shared/version';
 import { emulatorRows, isInstalling, shortPath } from './settings/emulators';
 import { ASPECT_LABEL, ASPECTS, RES_LABEL } from './settings/graphicsOptions';
 
@@ -77,9 +78,12 @@ export function Settings() {
 
   const autodetect = useCallback(async () => {
     const found = await api.invoke('emulators:autodetect');
-    const ids = Object.keys(found) as EmulatorId[];
+    // Only fill in emulators that aren't set yet; never replace a path the user chose.
+    const { settings: current, emulators: statuses } = useStore.getState();
+    // Fill in emulators that aren't set or whose saved path no longer works; never replace a working choice.
+    const ids = (Object.keys(found) as EmulatorId[]).filter((id) => !current?.emulators[id].appPath || !statuses.find((st) => st.id === id)?.executable);
     if (!ids.length) {
-      toast({ level: 'info', title: 'No emulators found in the usual places', detail: 'Install them from here, or choose each one manually.' });
+      toast({ level: 'info', title: 'Nothing new found', detail: 'Emulators you already set up are kept. Install the rest from here, or choose each one manually.' });
       return;
     }
     await updateSettings({ emulators: Object.fromEntries(ids.map((id) => [id, { appPath: found[id] }])) });
@@ -103,7 +107,7 @@ export function Settings() {
       const busy = isInstalling(installProgress[id]);
       const items: MenuItem[] = [];
       if (info?.installable) {
-        const label = !path ? 'Install latest version' : info.managedVersion ? (info.latestVersion && info.latestVersion !== info.managedVersion ? `Update to ${info.latestVersion}` : 'Reinstall latest version') : 'Install Arcadia’s own copy';
+        const label = !path ? 'Install latest version' : info.managedVersion ? (info.latestVersion && isNewer(info.latestVersion, info.managedVersion) ? `Update to ${info.latestVersion}` : 'Reinstall latest version') : 'Install Arcadia’s own copy';
         items.push({
           label,
           detail: 'Official Mac build, checksum-verified, into ~/Applications',
@@ -142,7 +146,12 @@ export function Settings() {
           progress: installProgress,
           openMenu: (id) => setModal({ kind: 'emulator', id }),
           installAll: () => void installAll(),
-          checkUpdates: () => void refreshInstalls(true).then(() => toast({ level: 'info', title: 'Checked for updates' })),
+          checkUpdates: () =>
+            void refreshInstalls(true).then(() => {
+              const failed = useStore.getState().installs.filter((i) => i.latestError);
+              if (failed.length) toast({ level: 'warn', title: `Couldn't check ${failed.map((i) => EMULATOR_LABEL[i.id]).join(', ')}`, detail: failed.map((i) => i.latestError).join('\n') });
+              else toast({ level: 'info', title: 'Checked for updates' });
+            }),
           autodetect: () => void autodetect(),
         });
       case 'library':
@@ -181,10 +190,8 @@ export function Settings() {
             value: 'Choose…',
             onConfirm: async () => {
               const p = await api.invoke('dialog:pick', { kind: 'file', title: 'Select your prod.keys' });
-              if (p) {
-                await updateSettings({ switchKeysPath: p });
-                void rescan();
-              }
+              // Arcadia rescans Switch dumps itself when the keys change.
+              if (p) await updateSettings({ switchKeysPath: p });
             },
           },
         ];
@@ -259,12 +266,26 @@ export function Settings() {
             kind: 'text',
             id: 'sgdb-key',
             label: 'SteamGridDB API key',
-            detail: settings.metadata.steamGridDbKey ? 'Saved. Covers, backgrounds and logos download automatically.' : 'Free at steamgriddb.com → Preferences → API. Paste it here with the keyboard.',
+            detail: settings.metadata.steamGridDbKey ? 'Saved. Select to replace it with a new key.' : 'Free at steamgriddb.com → Preferences → API. Paste it here with the keyboard.',
             value: settings.metadata.steamGridDbKey ? '••••••••' + settings.metadata.steamGridDbKey.slice(-4) : 'Not set',
-            onCommit: (v) => void updateSettings({ metadata: { steamGridDbKey: v && !v.startsWith('••') ? v : settings.metadata.steamGridDbKey } }),
+            editValue: '',
+            onCommit: (v) => void updateSettings({ metadata: { steamGridDbKey: v } }),
           },
+          ...(settings.metadata.steamGridDbKey
+            ? [{ kind: 'action' as const, id: 'sgdb-remove', label: 'Remove API key', detail: 'Stops artwork downloads. Art already downloaded stays.', onConfirm: () => void updateSettings({ metadata: { steamGridDbKey: null } }) }]
+            : []),
           { kind: 'toggle', id: 'sgdb-auto', label: 'Download artwork automatically', value: settings.metadata.autoFetch, onChange: (v) => void updateSettings({ metadata: { autoFetch: v } }) },
-          { kind: 'action', id: 'sgdb-now', label: 'Get missing artwork now', detail: 'To fix a wrong match, press Options on a game in the library', onConfirm: () => void rescan() },
+          {
+            kind: 'action',
+            id: 'sgdb-now',
+            label: 'Get missing artwork now',
+            detail: 'To fix a wrong match, press Options on a game in the library',
+            onConfirm: () =>
+              void api
+                .invoke('art:fetchMissing')
+                .then(() => toast({ level: 'info', title: 'Getting artwork in the background' }))
+                .catch((e: Error) => toast({ level: 'error', title: 'Artwork', detail: e.message })),
+          },
         ];
       case 'interface':
         return [
@@ -296,7 +317,15 @@ export function Settings() {
 
   const handle = useCallback(
     (e: InputEvent): boolean => {
-      if (editing) return true;
+      if (editing) {
+        // Typing needs a keyboard, but the controller can always back out.
+        if (e.action === 'back' && e.kind === 'press' && e.source !== 'key') {
+          play('back');
+          (document.activeElement as HTMLElement | null)?.blur();
+          setEditing(null);
+        }
+        return true;
+      }
       if (modal) return false;
       // Confirm commits on release (press only highlights); everything else acts on press.
       if (e.kind === 'release' && e.action !== 'confirm') return false;

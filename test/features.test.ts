@@ -15,7 +15,7 @@ import { networkReason, resolveRelease, type JsonFetch } from '../src/main/insta
 import { findApp } from '../src/main/install/installer';
 import { ArtStore, artKey } from '../src/main/art/store';
 import { SteamGridDbClient, type Fetch } from '../src/main/art/steamgriddb';
-import { mergeOneLevel } from '../src/main/settings/store';
+import { mergeSettings as mergeOneLevel } from '../src/shared/merge';
 import type { Game } from '../src/shared/types';
 
 const swapFace = LAYOUT_PRESETS.find((p) => p.id === 'swap-face')!.layout;

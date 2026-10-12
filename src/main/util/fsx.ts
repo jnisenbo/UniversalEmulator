@@ -16,16 +16,17 @@ let tmpCounter = 0;
 /**
  * Write via temp file + rename so a crash never leaves a half-written file.
  * Writes to the same path are queued, and each uses its own temp file, so
- * overlapping saves can't interleave; the last one wins.
+ * overlapping saves can't interleave; the last one wins. Pass a function to
+ * serialize at write time, so a queued write saves the latest state.
  */
-export function writeFileAtomic(path: string, data: string): Promise<void> {
+export function writeFileAtomic(path: string, data: string | (() => string)): Promise<void> {
   const previous = writeQueues.get(path) ?? Promise.resolve();
   const next = previous
     .catch(() => undefined)
     .then(async () => {
       await mkdir(dirname(path), { recursive: true });
       const tmp = `${path}.${process.pid}.${++tmpCounter}.tmp`;
-      await writeFile(tmp, data, 'utf8');
+      await writeFile(tmp, typeof data === 'function' ? data() : data, 'utf8');
       await rename(tmp, path);
     });
   writeQueues.set(path, next);

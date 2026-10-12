@@ -1,8 +1,9 @@
 import { resolveButton, type PadButton } from '@shared/controls';
+import { isPlainObject } from '@shared/merge';
 import type { ControllerProfile, Graphics } from '@shared/settings';
 
 type Toml = Record<string, unknown>;
-const isObj = (v: unknown): v is Toml => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isObj = isPlainObject;
 
 function table(root: Toml, path: string[]): Toml {
   let t = root;

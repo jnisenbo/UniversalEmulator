@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { EMULATOR_LABEL } from '@shared/platforms';
 import type { SessionState } from '@shared/types';
 import { onFrame } from '../engine/loop';
+import { useStore } from '../state/store';
 import { SPRINGS, Spring, prefersReducedMotion } from '../engine/spring';
 
 export interface LaunchOrigin {
@@ -20,22 +21,27 @@ export function LaunchOverlay({ origin, session, onClosed }: { origin: LaunchOri
   const progress = useRef(new Spring(0, SPRINGS.surface));
   const [visible, setVisible] = useState(false);
   const closing = useRef(false);
+  const startEpoch = useRef(0);
+  const sessionEpoch = useStore((s) => s.sessionEpoch);
 
   useEffect(() => {
     if (!origin) return;
     closing.current = false;
+    startEpoch.current = useStore.getState().sessionEpoch;
     setVisible(true);
     progress.current.jump(0);
     progress.current.setTarget(1);
   }, [origin]);
 
-  // Back to the library: reverse into the tile.
+  // Back to the library: reverse into the tile once this launch's session has
+  // ended. (Not 'session is idle': it's idle for a moment right after Play, and
+  // a game that exits instantly can go launching→ended→idle between renders.)
   useEffect(() => {
-    if (origin && session.kind === 'idle' && visible) {
+    if (origin && visible && sessionEpoch > startEpoch.current) {
       closing.current = true;
       progress.current.setTarget(0);
     }
-  }, [session.kind, origin, visible]);
+  }, [sessionEpoch, origin, visible]);
 
   useEffect(() => {
     if (!visible || !origin) return;
@@ -75,7 +81,7 @@ export function LaunchOverlay({ origin, session, onClosed }: { origin: LaunchOri
           <div className="launch-status">
             <div>Now playing</div>
             <div className="launch-sub">
-              Hold the Home button, or Create + Options, for one second to return to Arcadia
+              Press the Home button (or hold Create + Options) for the Arcadia menu
             </div>
           </div>
         )}

@@ -72,8 +72,9 @@ Arcadia's own menus follow it too.
 Limits:
 - **Xenia** has no remapping, so it keeps the standard Xbox layout.
 - **Ryubing and xemu** store mappings per controller, keyed by an ID only they know.
-  Select your controller once inside each emulator; Arcadia then keeps the mapping in
-  sync.
+  Select your controller once in each emulator opened from **Settings → Emulators →
+  Open** (not one Arcadia launched for a game; changes there go to Arcadia's managed
+  copy and are rebuilt each launch). Arcadia then keeps the mapping in sync.
 - **xemu** can't put a digital button on a trigger or the other way round. Arcadia
   tells you if your layout asks for that.
 

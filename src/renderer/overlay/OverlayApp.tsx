@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { formatPlayTime } from '@shared/library';
 import { EMULATOR_LABEL, PLATFORM_INFO } from '@shared/platforms';
 import { api } from '../api';
 import { placeholderArt } from '../art/placeholder';
@@ -9,11 +10,6 @@ import type { InputEvent } from '../input/actions';
 import { play } from '../sound/sfx';
 import { useStore } from '../state/store';
 import { ButtonHints } from '../components/ButtonHints';
-
-function formatPlayed(ms: number): string {
-  const m = Math.floor(ms / 60000);
-  return m < 1 ? 'Just started' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
-}
 
 /**
  * The in-game menu, shown over the running emulator when Home is pressed.
@@ -82,7 +78,7 @@ export function OverlayApp() {
 
   const game = 'gameId' in session ? games.find((g) => g.id === session.gameId) : undefined;
   const cover = game ? (artMap[game.id]?.grid ? `url("${artMap[game.id]!.grid}") center / cover` : placeholderArt(game).tile) : undefined;
-  const played = session.kind === 'running' ? formatPlayed(now - session.startedAt) : '';
+  const played = session.kind === 'running' ? formatPlayTime(now - session.startedAt) : '';
 
   return (
     <div className="ov-root">

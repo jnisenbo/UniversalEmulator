@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { EmulatorId } from '@shared/platforms';
 import type { InstallProgress } from '@shared/types';
@@ -61,8 +61,9 @@ export class Installer {
     if (entry.manualOnly) throw new Error(`Download ${id} from ${entry.homepage}.`);
     if (this.busy.has(id)) throw new Error('Already installing.');
     this.busy.add(id);
-    const work = await mkdtemp(join(this.userData, `install-${id}-`));
+    let work: string | null = null;
     try {
+      work = await mkdtemp(join(this.userData, `install-${id}-`));
       onProgress({ id, phase: 'resolving' });
       const release = await this.latest(id);
 
@@ -86,7 +87,7 @@ export class Installer {
       throw err;
     } finally {
       this.busy.delete(id);
-      await rm(work, { recursive: true, force: true });
+      if (work) await rm(work, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 
@@ -99,8 +100,9 @@ export class Installer {
     const entry = CATALOG[id];
     if (this.busy.has(id)) throw new Error('Already installing.');
     this.busy.add(id);
-    const work = await mkdtemp(join(this.userData, `install-${id}-`));
+    let work: string | null = null;
     try {
+      work = await mkdtemp(join(this.userData, `install-${id}-`));
       onProgress({ id, phase: 'extracting' });
       const extracted = join(work, 'x');
       await mkdir(extracted);
@@ -114,7 +116,7 @@ export class Installer {
       throw err;
     } finally {
       this.busy.delete(id);
-      await rm(work, { recursive: true, force: true });
+      if (work) await rm(work, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 
@@ -135,10 +137,26 @@ export class Installer {
     if ((await exists(dest)) && previous?.path !== dest) {
       throw new Error(`${dest} already exists and wasn't installed by Arcadia. Use “Choose an installed copy” instead.`);
     }
-    await rm(dest, { recursive: true, force: true });
-    // ditto preserves symlinks, permissions and code signatures inside the bundle.
-    const copy = await run('/usr/bin/ditto', [appSrc, dest], 300_000);
-    if (copy.code !== 0) throw new Error(`Copy failed: ${copy.stderr.trim()}`);
+    // Copy next to the destination first, then swap: a failed copy leaves the
+    // current install untouched. ditto preserves symlinks, permissions and signatures.
+    const staging = `${dest}.arcadia-new`;
+    const retired = `${dest}.arcadia-old`;
+    await rm(staging, { recursive: true, force: true });
+    const copy = await run('/usr/bin/ditto', [appSrc, staging], 300_000);
+    if (copy.code !== 0) {
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+      throw new Error(`Copy failed: ${copy.stderr.trim()}`);
+    }
+    await rm(retired, { recursive: true, force: true });
+    if (await exists(dest)) await rename(dest, retired);
+    try {
+      await rename(staging, dest);
+    } catch (err) {
+      if (await exists(retired)) await rename(retired, dest).catch(() => undefined);
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+      throw err;
+    }
+    await rm(retired, { recursive: true, force: true }).catch(() => undefined);
     this.managed[id] = { version: version ?? (await bundleVersion(dest)), path: dest, installedAt: Date.now(), source };
     await writeFileAtomic(this.indexFile, JSON.stringify(this.managed, null, 2));
     return dest;
@@ -172,6 +190,16 @@ export class Installer {
     const total = Number(res.headers.get('content-length')) || null;
     const hash = createHash('sha256');
     const out = createWriteStream(dest);
+    // Surface write failures (disk full, permissions) as a rejected install
+    // rather than an unhandled 'error' event or a 'drain' that never comes.
+    let writeError: Error | null = null;
+    const failed = new Promise<never>((_, reject) =>
+      out.once('error', (err) => {
+        writeError = err;
+        reject(err);
+      }),
+    );
+    failed.catch(() => undefined);
     let received = 0;
     let lastEmit = 0;
     const reader = res.body.getReader();
@@ -182,16 +210,20 @@ export class Installer {
         onData();
         hash.update(value);
         received += value.length;
-        if (!out.write(value)) await new Promise<void>((r) => out.once('drain', () => r()));
+        if (writeError) throw writeError;
+        if (!out.write(value)) await Promise.race([new Promise<void>((r) => out.once('drain', () => r())), failed]);
         const now = Date.now();
         if (now - lastEmit > 150) {
           lastEmit = now;
           progress(received, total);
         }
       }
-    } finally {
-      await new Promise<void>((resolve, reject) => out.end((err?: Error | null) => (err ? reject(err) : resolve())));
+    } catch (err) {
+      out.destroy();
+      void reader.cancel().catch(() => undefined);
+      throw writeError ? new Error(`Couldn't save the download: ${(writeError as Error).message}`) : err;
     }
+    await Promise.race([new Promise<void>((resolve, reject) => out.end((err?: Error | null) => (err ? reject(err) : resolve()))), failed]);
     progress(received, total);
     return hash.digest('hex');
   }

@@ -39,11 +39,24 @@ export async function resolveApp(installPath: string): Promise<ResolvedApp> {
   };
 }
 
+const PLIST_KEYS = ['CFBundleExecutable', 'CFBundleShortVersionString', 'CFBundleIdentifier'] as const;
+
+/**
+ * Reads only the string keys we need. (Converting the whole plist to JSON
+ * fails on plists that contain <date> or <data> values.)
+ */
 async function readPlist(path: string): Promise<Record<string, unknown>> {
   if (!isMac) throw new Error('Reading .app bundles requires macOS');
-  const r = await run('/usr/bin/plutil', ['-convert', 'json', '-o', '-', path]);
-  if (r.code !== 0) throw new Error(`plutil failed for ${path}: ${r.stderr.trim()}`);
-  return JSON.parse(r.stdout) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  const results = await Promise.all(PLIST_KEYS.map((key) => run('/usr/bin/plutil', ['-extract', key, 'raw', '-o', '-', path])));
+  results.forEach((r, i) => {
+    if (r.code === 0) out[PLIST_KEYS[i]!] = r.stdout.replace(/\n$/, '');
+  });
+  if (!out.CFBundleExecutable) {
+    const check = await run('/usr/bin/plutil', ['-lint', path]);
+    if (check.code !== 0) throw new Error(`Couldn't read ${path}: ${check.stdout.trim() || check.stderr.trim()}`);
+  }
+  return out;
 }
 
 async function archOf(executable: string): Promise<string[]> {

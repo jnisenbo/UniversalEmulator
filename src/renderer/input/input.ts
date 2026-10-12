@@ -97,13 +97,21 @@ export function injectAction(action: Action): void {
   dispatch({ action, kind: 'release', source: 'pad' });
 }
 
+/**
+ * The session decides whether the launcher reads the controller (not while a
+ * game has it). Window focus doesn't gate input, since macOS may not hand focus
+ * back after a game, but focus changes drop held buttons silently: a synthetic
+ * release would look like the user letting go and fire confirm-on-release actions.
+ */
 export function setInputEnabled(on: boolean): void {
-  if (on && !enabled) latched = true;
+  if (on && !enabled) latched = true; // ignore the pad until it's back to neutral
   enabled = on;
-  if (!on) {
-    for (const [action, h] of held) dispatch({ action, kind: 'release', source: h.source });
-    held.clear();
-  }
+  if (!on) held.clear();
+}
+
+function dropHeld(): void {
+  held.clear();
+  latched = true;
 }
 
 /** Calibration turns this off so moving the sticks doesn't navigate. */
@@ -231,8 +239,8 @@ export function installInput(): void {
   installed = true;
   window.addEventListener('keydown', (e) => onKey(e, true));
   window.addEventListener('keyup', (e) => onKey(e, false));
-  window.addEventListener('blur', () => setInputEnabled(false));
-  window.addEventListener('focus', () => setInputEnabled(true));
+  window.addEventListener('blur', dropHeld);
+  window.addEventListener('focus', dropHeld);
   window.addEventListener('pointermove', () => noteActivity('pointer'), { passive: true });
   onFrame('input', (_dt, now) => {
     readPads(now);

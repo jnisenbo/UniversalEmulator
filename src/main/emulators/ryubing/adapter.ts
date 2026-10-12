@@ -50,7 +50,9 @@ export const ryubingAdapter: EmulatorAdapter = {
 
     const warnings: string[] = [];
     if (controllersUpdated === 0) {
-      warnings.push('Select your controller once in Ryubing → Options → Settings → Input, then Arcadia will keep its mapping in sync.');
+      // Changes made in a Ryubing that Arcadia launched go to Arcadia's managed copy,
+      // which is rebuilt each launch; the user's own config is where this must happen.
+      warnings.push('Your controller isn’t set up in Ryubing yet. In Arcadia go to Settings → Emulators → Ryubing → Open Ryubing (not during a game), select your controller under Options → Settings → Input, save and quit. Arcadia keeps the mapping in sync after that.');
     }
     if (missingKeys.length) warnings.push(`This Ryubing version doesn't have: ${missingKeys.join(', ')}.`);
     return { warnings };

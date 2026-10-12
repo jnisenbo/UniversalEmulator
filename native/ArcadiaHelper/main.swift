@@ -180,19 +180,10 @@ final class Pairer: NSObject, IOBluetoothDeviceInquiryDelegate, IOBluetoothDevic
         active = true
         deadline = Date().addingTimeInterval(TimeInterval(timeoutSec))
 
-        // A controller paired before (e.g. via System Settings) that is switched on
-        // reconnects without pairing again. If none does, search for one in
-        // pairing mode: that's how a second or replacement controller gets paired.
-        let known = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] ?? []).filter { Pairer.looksLikeController($0.name) }
-        if let connected = known.first(where: { $0.isConnected() }) {
-            finish("connected", name: connected.name)
-            return
-        }
-        for dev in known where dev.openConnection() == kIOReturnSuccess {
-            finish("connected", name: dev.name)
-            return
-        }
-
+        // Always search for a controller in pairing mode (Create + Home). A
+        // remembered controller reconnects by itself when switched on, so this
+        // wizard is for new ones: a second controller, or re-pairing one.
+        // (No blocking openConnection() calls on the main run loop here.)
         emit(["event": "pair", "phase": "searching"])
         let inq = IOBluetoothDeviceInquiry(delegate: self)!
         inq.updateNewDeviceNames = true
@@ -237,7 +228,8 @@ final class Pairer: NSObject, IOBluetoothDeviceInquiryDelegate, IOBluetoothDevic
 
     // IOBluetoothDeviceInquiryDelegate
     func deviceInquiryDeviceFound(_ sender: IOBluetoothDeviceInquiry!, device: IOBluetoothDevice!) {
-        guard active, let device, Pairer.looksLikeController(device.name) else { return }
+        // Ignore further results (name updates, other controllers) once one is being paired.
+        guard active, self.device == nil, let device, Pairer.looksLikeController(device.name) else { return }
         sender.stop()
         emit(["event": "pair", "phase": "found", "name": device.name ?? "Controller"])
         connect(device)

@@ -4,7 +4,7 @@ import { detectApp } from '../status';
 /** Splits a user-editable template like `{game} --fullscreen=true`, keeping {game} as one argument. */
 export function expandArgs(template: string, gamePath: string): string[] {
   const tokens = template.match(/"[^"]*"|\S+/g) ?? [];
-  const args = tokens.map((t) => (t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1) : t)).map((t) => (t === '{game}' ? gamePath : t.replaceAll('{game}', gamePath)));
+  const args = tokens.map((t) => (t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1) : t)).map((t) => (t === '{game}' ? gamePath : t.replaceAll('{game}', () => gamePath)));
   return template.includes('{game}') ? args : [...args, gamePath];
 }
 

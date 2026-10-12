@@ -9,7 +9,7 @@ import { groupDiscs } from '../src/main/library/discs';
 import { PlayHistory } from '../src/main/library/history';
 import { dolphinAdapter } from '../src/main/emulators/dolphin/adapter';
 import { applyDolphinIni } from '../src/main/emulators/dolphin/config';
-import { mergeOneLevel } from '../src/main/settings/store';
+import { mergeSettings as mergeOneLevel } from '../src/shared/merge';
 
 function game(over: Partial<Game>): Game {
   return {

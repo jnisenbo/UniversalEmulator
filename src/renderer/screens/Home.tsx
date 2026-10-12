@@ -197,6 +197,14 @@ export function Home() {
 
   useInputHandler(handle);
 
+  // Input can drop mid-press (focus loss, a game starting): clear the pressed look.
+  useEffect(() => {
+    const clear = (): void => setPressed(false);
+    window.addEventListener('blur', clear);
+    return () => window.removeEventListener('blur', clear);
+  }, []);
+  useEffect(() => setPressed(false), [session.kind]);
+
   // Returning from a game: focus is back on the row, on the same tile.
   const wasPlaying = useRef(false);
   useEffect(() => {

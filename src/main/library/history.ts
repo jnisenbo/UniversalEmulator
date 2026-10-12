@@ -52,7 +52,8 @@ export class PlayHistory {
   /** Returns the updated record, or null if the session was too short to count. */
   async record(game: Game, playedMs: number, endedAt = Date.now()): Promise<PlayRecord | null> {
     const next = this.apply(game, playedMs, endedAt);
-    if (next) await writeFileAtomic(this.file, JSON.stringify(this.records, null, 2));
+    // Serialized when the write runs, so it includes anything recorded since (e.g. on quit).
+    if (next) await writeFileAtomic(this.file, () => JSON.stringify(this.records, null, 2));
     return next;
   }
 

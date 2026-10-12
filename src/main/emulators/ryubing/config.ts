@@ -1,8 +1,9 @@
 import { resolveButton, type PadButton } from '@shared/controls';
+import { isPlainObject } from '@shared/merge';
 import type { ControllerProfile, Graphics } from '@shared/settings';
 
 type Json = Record<string, unknown>;
-const isObj = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isObj = isPlainObject;
 
 /**
  * Ryubing keys Arcadia owns. Only keys already present in the user's

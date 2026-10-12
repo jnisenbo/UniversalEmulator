@@ -44,6 +44,9 @@ ARCADIA_WINDOWED=1 pnpm dev
         (in dev: for your terminal or IDE). Allow it.
       - If it times out: System Settings → Bluetooth should list the controller,
         and the wizard's *Use System Settings instead* route still works.
+      - The wizard always searches for a controller in pairing mode, so it also
+        pairs a second controller. A controller you paired before reconnects on
+        its own when you press Home; no wizard needed.
 - [ ] Unplug: it keeps working, the battery shows in the top bar, and the light bar
       color in Settings changes the controller's light.
 - [ ] Calibrate and test: both sticks draw, triggers fill, buttons light up, and
@@ -65,9 +68,11 @@ Do each with one game per emulator.
       does nothing, open Dolphin → Controllers → Configure, note the device name
       shown (e.g. `SDL/0/PS5 Controller`), and enter it in Settings → Controller →
       Dolphin device name.
-- [ ] **Ryubing**: the first time, select the controller in Ryubing → Options →
-      Settings → Input and save. From then on, Arcadia applies your layout.
-- [ ] **xemu**: same. Open xemu → Input once with the controller connected.
+- [ ] **Ryubing**: the first time, open it from Settings → Emulators → Ryubing →
+      Open Ryubing (not by launching a game), select the controller in Options →
+      Settings → Input, save and quit. From then on, Arcadia applies your layout.
+- [ ] **xemu**: same: open it from Settings → Emulators → xemu → Open xemu, open
+      Input once with the controller connected, then quit.
 - [ ] After a game starts, Arcadia's window hides (after ~2 s).
 
 ## 6. In-game menu (Home button)

@@ -43,7 +43,7 @@ export function ActionMenu({ title, items, onClose, children, keepOpen }: { titl
       <div className="menu-narrow">
         {children}
         {items.map((item, i) => (
-          <div key={item.label} className="srow" data-focused={i === focus} data-disabled={!!item.disabled} onClick={() => runAt(i)}>
+          <div key={i} className="srow" data-focused={i === focus} data-disabled={!!item.disabled} onClick={() => runAt(i)}>
             <div className="srow-text">
               <div className="srow-label">{item.label}</div>
               {item.detail && <div className="srow-detail">{item.detail}</div>}

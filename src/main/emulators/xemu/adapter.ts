@@ -41,7 +41,7 @@ export const xemuAdapter: EmulatorAdapter = {
 
     const warnings: string[] = [];
     if (mappingsUpdated === 0 && Object.keys(profile.layout).length) {
-      warnings.push('Open xemu → Input once with your controller connected; after that Arcadia applies your button layout to it.');
+      warnings.push('To use your button layout in xemu: go to Settings → Emulators → xemu → Open xemu (not during a game), open Input with your controller connected, then quit. Arcadia applies your layout from then on.');
     }
     if (skippedButtons.length) warnings.push(`xemu can't move these to the buttons you chose: ${skippedButtons.map((b) => PAD_LABEL[b]).join(', ')}.`);
     return { warnings };

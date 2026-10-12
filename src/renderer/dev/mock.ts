@@ -1,5 +1,6 @@
 import type { ArcadiaApi, EventChannel, IpcEvents, IpcRequests, RequestChannel } from '@shared/ipc';
 import { PLATFORM_INFO, type Platform } from '@shared/platforms';
+import { mergeSettings } from '@shared/merge';
 import { defaultSettings, type Settings } from '@shared/settings';
 import type { Game, SessionState } from '@shared/types';
 
@@ -17,13 +18,6 @@ const SAMPLE: [string, Platform, string, string][] = [
   ['Donkey Kong Country Returns', 'wii', 'SF8E01', 'rvz'],
   ['Halo: Combat Evolved', 'xbox', '4D530004', 'xiso'],
 ];
-
-function deepMerge(base: unknown, patch: unknown): unknown {
-  if (typeof base !== 'object' || base === null || Array.isArray(base) || typeof patch !== 'object' || patch === null || Array.isArray(patch)) return patch === undefined ? base : patch;
-  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
-  for (const [k, v] of Object.entries(patch)) out[k] = k === 'layout' ? v : deepMerge(out[k], v);
-  return out;
-}
 
 /** Development stand-in for the preload API; never shipped in the Electron build path. */
 export function createMockApi(): ArcadiaApi {
@@ -48,7 +42,7 @@ export function createMockApi(): ArcadiaApi {
 
   const handlers: { [C in RequestChannel]: (req: IpcRequests[C]['req']) => IpcRequests[C]['res'] | Promise<IpcRequests[C]['res']> } = {
     'settings:get': () => settings,
-    'settings:update': (patch) => (settings = deepMerge(settings, patch) as Settings),
+    'settings:update': (patch) => (settings = mergeSettings(settings, patch) as Settings),
     'library:list': () => games,
     'library:scan': async () => {
       for (let i = 0; i <= games.length; i++) {
@@ -119,6 +113,7 @@ export function createMockApi(): ArcadiaApi {
     'emulators:openApp': () => undefined,
     'emulators:openHomepage': () => undefined,
     'art:all': () => ({}),
+    'art:fetchMissing': () => undefined,
     'history:all': () => ({
       'switch-0100152000022000': { lastPlayed: Date.now() - 3_600_000, totalMs: 12_400_000, sessions: 9 },
       'wii-rmge01': { lastPlayed: Date.now() - 86_400_000 * 1.2, totalMs: 4_100_000, sessions: 3 },

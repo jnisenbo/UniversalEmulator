@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { EventChannel, IpcEvents } from '@shared/ipc';
 import { EMULATOR_IDS, type EmulatorId } from '@shared/platforms';
 import type { Settings, SettingsPatch } from '@shared/settings';
-import type { Game, GameArt, InstallInfo, ScanSummary } from '@shared/types';
+import type { EmulatorStatus, Game, GameArt, InstallInfo, ScanSummary } from '@shared/types';
 import { ART_SCHEME, ArtStore } from './art/store';
 import { SteamGridDbClient, type Fetch } from './art/steamgriddb';
 import { HelperClient, type MenuButton } from './controller/helper';
@@ -36,7 +36,10 @@ const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 const home = homedir();
 
 app.setName('Arcadia');
-if (!app.requestSingleInstanceLock()) app.quit();
+// A second launch hands over to the running instance ('second-instance') and exits
+// before doing anything else.
+const isPrimaryInstance = app.requestSingleInstanceLock();
+if (!isPrimaryInstance) app.exit(0);
 
 // Must happen before 'ready': lets the renderer load cached artwork.
 protocol.registerSchemesAsPrivileged([{ scheme: ART_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
@@ -105,13 +108,54 @@ function switchKeysPath(s: Settings): string {
   return s.switchKeysPath ?? join(s.emulators.ryubing.dataDir ?? defaultRyubingDataDir(home), 'system', 'prod.keys');
 }
 
-async function rescan(): Promise<ScanSummary> {
+async function scanOnce(): Promise<ScanSummary> {
   const s = settings.get();
   const switchHeaderKey = await loadHeaderKey(switchKeysPath(s));
   const summary = await scanLibrary(s.libraryFolders, cache, { switchHeaderKey }, (p) => send('library:progress', p));
   games = sortGames(cache.games());
   void fetchMissingArt();
   return summary;
+}
+
+let scanning: Promise<ScanSummary> | null = null;
+let scanAgain = false;
+/**
+ * One scan at a time. A request during a scan joins it and triggers one more
+ * pass afterwards, so changes made meanwhile (a new folder, new keys) are seen.
+ */
+function rescan(): Promise<ScanSummary> {
+  if (scanning) {
+    scanAgain = true;
+    return scanning;
+  }
+  scanning = (async () => {
+    try {
+      let summary: ScanSummary;
+      do {
+        scanAgain = false;
+        summary = await scanOnce();
+      } while (scanAgain);
+      return summary;
+    } finally {
+      scanning = null;
+    }
+  })();
+  return scanning;
+}
+
+// Emulator checks run plutil, lipo, xattr and spctl; cache them briefly.
+let statusCache: { at: number; value: Promise<EmulatorStatus[]> } | null = null;
+const STATUS_TTL_MS = 30_000;
+function invalidateStatus(): void {
+  statusCache = null;
+}
+function emulatorStatuses(): Promise<EmulatorStatus[]> {
+  if (!statusCache || Date.now() - statusCache.at > STATUS_TTL_MS) {
+    const value = Promise.all(allAdapters().map((a) => a.detect(adapterContext(a.id, settings.get()))));
+    statusCache = { at: Date.now(), value };
+    value.catch(() => invalidateStatus());
+  }
+  return statusCache.value;
 }
 
 // ---------- Artwork ----------
@@ -123,9 +167,9 @@ function artClient(): SteamGridDbClient | null {
 
 let artRunning = false;
 /** Background, one game at a time, politely spaced. Skips games that already have art. */
-async function fetchMissingArt(): Promise<void> {
+async function fetchMissingArt(force = false): Promise<void> {
   const client = artClient();
-  if (!client || !settings.get().metadata.autoFetch || artRunning) return;
+  if (!client || (!force && !settings.get().metadata.autoFetch) || artRunning) return;
   artRunning = true;
   try {
     for (const g of games.filter((x) => art.needsFetch(x))) {
@@ -267,13 +311,14 @@ function wire(): void {
       'settings:update': async (patch) => {
         const prev = settings.get();
         const next = await settings.update(PatchSchema.parse(patch) as SettingsPatch);
-        // New keys can identify Switch dumps that were unidentified before.
-        if (switchKeysPath(prev) !== switchKeysPath(next)) cache.replaceAll(new Map());
+        invalidateStatus();
+        // New keys can identify Switch dumps that weren't before (cache entries record the key used).
+        if (switchKeysPath(prev) !== switchKeysPath(next)) void rescan().catch((err: unknown) => console.error('[scan]', err));
         return next;
       },
       'library:list': () => games,
       'library:scan': () => rescan(),
-      'emulators:status': () => Promise.all(allAdapters().map((a) => a.detect(adapterContext(a.id, settings.get())))),
+      'emulators:status': () => emulatorStatuses(),
       'emulators:autodetect': async () => {
         const found: Partial<Record<EmulatorId, string>> = {};
         for (const a of allAdapters()) {
@@ -318,6 +363,7 @@ function wire(): void {
         try {
           const path = await installer.install(id, (p) => send('emulators:installProgress', p));
           await settings.update({ emulators: { [id]: { appPath: path } } } as SettingsPatch);
+          invalidateStatus();
           return { ok: true, path };
         } catch (err) {
           return { ok: false, error: (err as Error).message };
@@ -337,6 +383,7 @@ function wire(): void {
         try {
           const path = await installer.installFromFile(id, file, (p) => send('emulators:installProgress', p));
           await settings.update({ emulators: { [id]: { appPath: path } } } as SettingsPatch);
+          invalidateStatus();
           return { ok: true, path };
         } catch (err) {
           return { ok: false, error: (err as Error).message };
@@ -346,6 +393,8 @@ function wire(): void {
         const { id } = EmulatorIdSchema.parse(req);
         const path = getAdapter(id).installPath(settings.get());
         if (!path) throw new Error('Install or choose the emulator first.');
+        // The user is about to fix things inside the emulator (keys, BIOS, first launch).
+        invalidateStatus();
         const err = await shell.openPath(path);
         if (err) throw new Error(err);
       },
@@ -398,6 +447,10 @@ function wire(): void {
         if (isMac) await shell.openExternal(url);
       },
       'history:all': () => history.all(),
+      'art:fetchMissing': () => {
+        if (!artClient()) throw new Error('Add your SteamGridDB API key first.');
+        void fetchMissingArt(true);
+      },
       'art:all': () => {
         const out: Record<string, GameArt> = {};
         for (const g of games) {
@@ -437,6 +490,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  if (!isPrimaryInstance) return;
   protocol.handle(ART_SCHEME, (req) => {
     const file = art.filePath(req.url);
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response(null, { status: 404 });
@@ -448,10 +502,17 @@ app.whenReady().then(async () => {
   helper.start();
   helper.send({ cmd: 'setLight', ...settings.get().controller.lightBar });
   win = createWindow();
-  win.on('closed', () => (win = null));
+  // Arcadia is one window: closing it quits (the hidden in-game menu window
+  // would otherwise keep a windowless app alive).
+  // Coming back from another app (e.g. after setting up an emulator): re-check.
+  win.on('focus', invalidateStatus);
+  win.on('closed', () => {
+    win = null;
+    app.quit();
+  });
   // Refresh in the background so the cached library shows instantly.
   if (settings.get().libraryFolders.length) {
-    void rescan().then(() => send('library:progress', { phase: 'done', scanned: games.length, total: games.length }));
+    void rescan().catch((err: unknown) => console.error('[scan]', err));
   }
 });
 
