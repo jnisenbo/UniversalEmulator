@@ -26,6 +26,7 @@ export interface IpcRequests {
   'emulators:autodetect': { req: void; res: Partial<Record<EmulatorId, string>> };
   'emulators:installInfo': { req: { checkLatest: boolean }; res: InstallInfo[] };
   'emulators:install': { req: { id: EmulatorId }; res: { ok: boolean; path?: string; error?: string } };
+  'emulators:installFromFile': { req: { id: EmulatorId }; res: { ok: boolean; path?: string; error?: string; cancelled?: boolean } };
   'emulators:openApp': { req: { id: EmulatorId }; res: void };
   'emulators:openHomepage': { req: { id: EmulatorId }; res: void };
   'game:launch': { req: { gameId: string }; res: LaunchResult };
@@ -71,6 +72,7 @@ export const REQUEST_CHANNELS = [
   'emulators:autodetect',
   'emulators:installInfo',
   'emulators:install',
+  'emulators:installFromFile',
   'emulators:openApp',
   'emulators:openHomepage',
   'game:launch',

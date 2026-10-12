@@ -71,7 +71,17 @@ export function emulatorRows(opts: {
       ...(fraction !== undefined ? { progress: fraction } : {}),
       onConfirm: () => opts.openMenu(id),
     });
-    if (p?.phase === 'error' && p.message) rows.push({ kind: 'info', id: `emu-${id}-err`, label: p.message, level: 'error' });
+    if (p?.phase === 'error' && p.message) {
+      rows.push({ kind: 'info', id: `emu-${id}-err`, label: p.message, level: 'error' });
+      if (info?.installable) {
+        rows.push({
+          kind: 'info',
+          id: `emu-${id}-fallback`,
+          label: `You can download it from ${info.homepage} in your browser, then choose “Install from a downloaded file…” here.`,
+          level: 'warn',
+        });
+      }
+    }
     else if (p?.phase === 'done' && info?.firstRun) rows.push({ kind: 'info', id: `emu-${id}-next`, label: `Next: ${info.firstRun}`, level: 'warn' });
     for (const [i, issue] of (path ? (st?.issues ?? []) : []).entries()) {
       rows.push({ kind: 'info', id: `emu-${id}-issue-${i}`, label: issue.message, level: issue.level });

@@ -20,8 +20,11 @@ ARCADIA_WINDOWED=1 pnpm dev
 - [ ] Settings → Emulators → **Install all**: Dolphin, Ryubing and xemu download with
       progress and end as *Installed*. They appear in `~/Applications`.
       - Already verified by CI: the Dolphin and xemu installs work and both apps are
-        notarized. The Ryubing source is new; if it fails, the error lists every
-        source tried.
+        notarized.
+      - Ryubing's server blocked GitHub's runners, so it's unverified. If it fails,
+        the error shows why (e.g. `ENOTFOUND`, `UND_ERR_CONNECT_TIMEOUT`).
+        Download Ryubing from ryujinx.app in your browser, then on Ryubing's row
+        choose **Install from a downloaded file…** and pick the `.tar.gz`.
 - [ ] Open Ryubing from its menu → install your keys and firmware → quit it.
 - [ ] Open xemu from its menu → set your BIOS, MCPX and HDD image → quit it.
 - [ ] Back in Arcadia, the issues under each emulator disappear (re-open Settings).

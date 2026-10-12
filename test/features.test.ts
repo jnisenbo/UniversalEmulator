@@ -11,7 +11,7 @@ import { bufferReader } from '../src/main/library/probes/io';
 import { probeReader } from '../src/main/library/probes/index';
 import { parseXbeCertificate } from '../src/main/library/probes/xbox360';
 import { CATALOG, hostAllowed } from '../src/main/install/catalog';
-import { resolveRelease, type JsonFetch } from '../src/main/install/resolve';
+import { networkReason, resolveRelease, type JsonFetch } from '../src/main/install/resolve';
 import { findApp } from '../src/main/install/installer';
 import { ArtStore, artKey } from '../src/main/art/store';
 import { SteamGridDbClient, type Fetch } from '../src/main/art/steamgriddb';
@@ -186,6 +186,11 @@ describe('emulator installer: Forgejo', () => {
         ? json({ tag_name: '1.3.3', assets: [{ name: 'ryujinx-1.3.3-linux_x64.tar.gz', browser_download_url: 'https://git.ryujinx.app/x' }, { name: 'ryujinx-1.3.3-macos_universal.app.tar.gz', browser_download_url: 'https://git.ryujinx.app/Ryubing/Stable/releases/download/1.3.3/ryujinx-1.3.3-macos_universal.app.tar.gz' }] })
         : json({}, false);
     expect(await resolveRelease(CATALOG.ryubing, fetchJson)).toMatchObject({ version: '1.3.3', sha256: null, source: 'git.ryujinx.app/Ryubing/Stable' });
+  });
+
+  it('surfaces the network cause behind "fetch failed"', () => {
+    const err = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } });
+    expect(networkReason(err)).toBe('fetch failed (ENOTFOUND)');
   });
 
   it('explains which sources were tried', async () => {

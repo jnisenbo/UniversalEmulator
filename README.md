@@ -109,7 +109,8 @@ never modified.
 - **xemu** (`-config_path`): a patched copy of your `xemu.toml`. Your BIOS and HDD
   paths are kept.
 
-**Emulator downloads.**
+**Emulator downloads.** Any emulator can also be installed from a `.dmg`, `.zip`
+or `.tar.gz` you downloaded yourself, with the same unpacking and signature check.
 - **Source:** the Homebrew cask API (official URL + SHA-256) first, then GitHub
   releases (asset SHA-256 digest).
 - **Checks:** https only, a per-emulator host allowlist (checked again after
@@ -162,8 +163,12 @@ compiles and smoke-tests the Swift helper, runs the live install tests, and pack
 - **Dolphin** (2609a) and **xemu** (0.8.136) install end to end through Arcadia's
   installer: download, checksum, unpack, signature check, install. Gatekeeper
   reports both as *Notarized Developer ID*.
-- **Ryubing**: install from its Forgejo releases (being verified; see the latest CI
-  log, "Live emulator sources and installs").
+- **Ryubing**: Arcadia looks for it on its own release server, `git.ryujinx.app`.
+  That server refused connections from GitHub's cloud runners, so the automatic
+  Ryubing install is unverified and may or may not work from a home connection.
+  If it fails, download Ryubing from ryujinx.app in your browser and use
+  **Install from a downloaded file…** on Ryubing's row. CI verifies that path with
+  xemu's archive.
 
 **Needs your hands on a real Mac** (see [TESTING.md](TESTING.md)):
 - Pairing and the Home-button menu with a real DualSense.

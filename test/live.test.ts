@@ -4,7 +4,7 @@
  *   LIVE_INSTALL=1  also download, verify and install them (macOS only)
  * CI runs both on the macOS job.
  */
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -24,6 +24,19 @@ describe.skipIf(!process.env.LIVE_SOURCES)('live: release sources', () => {
       expect(r.url).toMatch(/^https:\/\//);
     }, 30_000);
   }
+});
+
+describe.skipIf(!process.env.LIVE_INSTALL || process.platform !== 'darwin')('live: install from a downloaded file', () => {
+  it('installs xemu from an archive the user downloaded', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'arcadia-file-'));
+    const release = await resolveRelease(CATALOG.xemu, fetchJson);
+    const archive = join(root, 'xemu-download.zip');
+    await writeFile(archive, Buffer.from(await (await fetch(release.url)).arrayBuffer()));
+    const installer = new Installer(root, join(root, 'Applications'), fetchJson, fetch as unknown as StreamFetch);
+    const path = await installer.installFromFile('xemu', archive, () => undefined);
+    expect(path).toMatch(/xemu\.app$/);
+    expect(installer.managedInstall('xemu')?.version).toMatch(/\d/);
+  }, 300_000);
 });
 
 describe.skipIf(!process.env.LIVE_INSTALL || process.platform !== 'darwin')('live: install', () => {

@@ -52,7 +52,7 @@ export function Settings() {
   const controller = useStore((s) => s.controller);
   const games = useStore((s) => s.games);
   const scan = useStore((s) => s.scan);
-  const { updateSettings, refreshEmulators, refreshInstalls, install, rescan, setScreen, toast } = useStore.getState();
+  const { updateSettings, refreshEmulators, refreshInstalls, install, installFromFile, rescan, setScreen, toast } = useStore.getState();
 
   const [col, setCol] = useState<'nav' | 'panel'>(() => (useStore.getState().settingsSection ? 'panel' : 'nav'));
   const [section, setSection] = useState(() => Math.max(0, SECTIONS.findIndex((s) => s.id === useStore.getState().settingsSection)));
@@ -115,6 +115,12 @@ export function Settings() {
       } else {
         items.push({ label: `Get ${EMULATOR_LABEL[id]} from its website`, detail: 'Experimental: no automatic install yet', run: () => void api.invoke('emulators:openHomepage', { id }) });
       }
+      items.push({
+        label: 'Install from a downloaded file…',
+        detail: 'Got it from the website yourself? Pick the .dmg, .zip or .tar.gz and Arcadia installs it',
+        disabled: busy,
+        run: () => void installFromFile(id).then((ok) => ok && toast({ level: 'info', title: `${EMULATOR_LABEL[id]} is ready` })),
+      });
       if (path) {
         items.push({ label: `Open ${EMULATOR_LABEL[id]}`, ...(info?.firstRun ? { detail: info.firstRun } : {}), run: () => void api.invoke('emulators:openApp', { id }).catch((e: Error) => toast({ level: 'error', title: e.message })) });
       }
@@ -122,7 +128,7 @@ export function Settings() {
       if (info?.installable) items.push({ label: 'Project website', run: () => void api.invoke('emulators:openHomepage', { id }) });
       return items;
     },
-    [installs, settings, installProgress, install, pickEmulator, toast],
+    [installs, settings, installProgress, install, installFromFile, pickEmulator, toast],
   );
 
   const rows: Row[] = useMemo(() => {

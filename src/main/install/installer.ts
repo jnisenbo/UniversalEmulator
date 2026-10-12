@@ -77,23 +77,8 @@ export class Installer {
       await mkdir(extracted);
       const appSrc = await this.extract(file, extracted, entry.appName);
 
-      const sig = await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appSrc], 60_000);
-      if (sig.code !== 0) throw new Error(`The app's code signature is invalid: ${sig.stderr.trim().split('\n')[0]}`);
-
       onProgress({ id, phase: 'installing', version: release.version });
-      await mkdir(this.appsDir, { recursive: true });
-      const dest = join(this.appsDir, basename(appSrc));
-      const previous = this.managed[id];
-      if ((await exists(dest)) && previous?.path !== dest) {
-        throw new Error(`${dest} already exists and wasn't installed by Arcadia. Select it in Settings instead.`);
-      }
-      await rm(dest, { recursive: true, force: true });
-      // ditto preserves symlinks, permissions and code signatures inside the bundle.
-      const copy = await run('/usr/bin/ditto', [appSrc, dest], 300_000);
-      if (copy.code !== 0) throw new Error(`Copy failed: ${copy.stderr.trim()}`);
-
-      this.managed[id] = { version: release.version, path: dest, installedAt: Date.now(), source: release.source };
-      await writeFileAtomic(this.indexFile, JSON.stringify(this.managed, null, 2));
+      const dest = await this.place(id, appSrc, release.source, release.version);
       onProgress({ id, phase: 'done', version: release.version, ...(release.sha256 ? {} : { message: 'No checksum was published for this download; the code signature was verified.' }) });
       return dest;
     } catch (err) {
@@ -103,6 +88,54 @@ export class Installer {
       this.busy.delete(id);
       await rm(work, { recursive: true, force: true });
     }
+  }
+
+  /**
+   * Install from an archive the user downloaded themselves (when the automatic
+   * download can't reach the source). Same unpacking, signature check and
+   * destination as a normal install; there's no published checksum to compare.
+   */
+  async installFromFile(id: EmulatorId, file: string, onProgress: (p: InstallProgress) => void): Promise<string> {
+    const entry = CATALOG[id];
+    if (this.busy.has(id)) throw new Error('Already installing.');
+    this.busy.add(id);
+    const work = await mkdtemp(join(this.userData, `install-${id}-`));
+    try {
+      onProgress({ id, phase: 'extracting' });
+      const extracted = join(work, 'x');
+      await mkdir(extracted);
+      const appSrc = (await isDir(file)) && file.endsWith('.app') ? file : await this.extract(file, extracted, entry.appName);
+      if (!entry.appName.test(basename(appSrc))) throw new Error(`That doesn't look like ${id}: found ${basename(appSrc)}.`);
+      const dest = await this.place(id, appSrc, 'file you chose');
+      onProgress({ id, phase: 'done', message: 'Installed from your download; the code signature was verified.' });
+      return dest;
+    } catch (err) {
+      onProgress({ id, phase: 'error', message: (err as Error).message });
+      throw err;
+    } finally {
+      this.busy.delete(id);
+      await rm(work, { recursive: true, force: true });
+    }
+  }
+
+  /** Signature check, then copy into ~/Applications and record it. */
+  private async place(id: EmulatorId, appSrc: string, source: string, version?: string): Promise<string> {
+    const sig = await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appSrc], 60_000);
+    if (sig.code !== 0) throw new Error(`The app's code signature is invalid: ${sig.stderr.trim().split('\n')[0]}`);
+    await mkdir(this.appsDir, { recursive: true });
+    const dest = join(this.appsDir, basename(appSrc));
+    const previous = this.managed[id];
+    if ((await exists(dest)) && previous?.path !== dest) {
+      throw new Error(`${dest} already exists and wasn't installed by Arcadia. Use “Choose an installed copy” instead.`);
+    }
+    await rm(dest, { recursive: true, force: true });
+    // ditto preserves symlinks, permissions and code signatures inside the bundle.
+    const copy = await run('/usr/bin/ditto', [appSrc, dest], 300_000);
+    if (copy.code !== 0) throw new Error(`Copy failed: ${copy.stderr.trim()}`);
+    const plist = await run('/usr/bin/defaults', ['read', join(dest, 'Contents', 'Info'), 'CFBundleShortVersionString']);
+    this.managed[id] = { version: version ?? (plist.code === 0 ? plist.stdout.trim() : 'unknown'), path: dest, installedAt: Date.now(), source };
+    await writeFileAtomic(this.indexFile, JSON.stringify(this.managed, null, 2));
+    return dest;
   }
 
   /** Streams to disk while hashing. Re-checks the host after redirects. */
@@ -128,7 +161,7 @@ export class Installer {
 
   private async stream(url: string, dest: string, hosts: string[], progress: (received: number, total: number | null) => void, signal: AbortSignal, onData: () => void): Promise<string> {
     const res = await this.fetchStream(url, { signal });
-    if (!res.ok || !res.body) throw new Error(`Download failed (${res.status}).`);
+    if (!res.ok || !res.body) throw new Error(`Download failed (HTTP ${res.status}).`);
     if (res.url && !hostAllowed(res.url, hosts)) throw new Error('The download redirected to an unexpected host.');
     const total = Number(res.headers.get('content-length')) || null;
     const hash = createHash('sha256');

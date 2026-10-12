@@ -61,6 +61,13 @@ async function fromForgejo(host: string, repo: string, asset: RegExp, fetchJson:
   return { version: label ? `${version} (${label})` : version, url: a.browser_download_url, sha256: null, source: `${host}/${repo}` };
 }
 
+/** Node's fetch reports "fetch failed" and hides the useful part in `cause`. */
+export function networkReason(err: unknown): string {
+  const e = err as Error & { cause?: { code?: string; message?: string } };
+  const cause = e.cause?.code ?? e.cause?.message;
+  return cause ? `${e.message} (${cause})` : e.message;
+}
+
 const describe = (s: Source): string => (s.kind === 'cask' ? `Homebrew cask "${s.token}"` : s.kind === 'github' ? `GitHub ${s.repo}` : `${s.host}/${s.repo}`);
 
 /** First source that yields a release whose URL is on an allowed host. */
@@ -82,7 +89,7 @@ export async function resolveRelease(entry: CatalogEntry, fetchJson: JsonFetch):
       }
       return r;
     } catch (err) {
-      errors.push(`${describe(s)}: ${(err as Error).message}`);
+      errors.push(`${describe(s)}: ${networkReason(err)}`);
     }
   }
   throw new Error(`Couldn't find a macOS download${errors.length ? ` (${errors.join('; ')})` : ''}. Download it from ${entry.homepage} instead.`);

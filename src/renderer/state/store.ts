@@ -42,6 +42,7 @@ interface State {
   dismissToast(id: number): void;
   refreshInstalls(checkLatest: boolean): Promise<void>;
   install(id: EmulatorId): Promise<boolean>;
+  installFromFile(id: EmulatorId): Promise<boolean>;
 }
 
 let toastId = 0;
@@ -79,6 +80,15 @@ export const useStore = create<State>((set, get) => ({
 
   async refreshInstalls(checkLatest) {
     set({ installs: await api.invoke('emulators:installInfo', { checkLatest }) });
+  },
+
+  async installFromFile(id) {
+    const r = await api.invoke('emulators:installFromFile', { id });
+    if (r.cancelled) return false;
+    if (!r.ok) get().toast({ level: 'error', title: 'Install failed', ...(r.error ? { detail: r.error } : {}) });
+    const [settings] = await Promise.all([api.invoke('settings:get'), get().refreshInstalls(false), get().refreshEmulators()]);
+    set({ settings });
+    return r.ok;
   },
 
   async install(id) {

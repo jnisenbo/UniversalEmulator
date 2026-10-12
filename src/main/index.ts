@@ -313,6 +313,25 @@ function wire(): void {
           return { ok: false, error: (err as Error).message };
         }
       },
+      'emulators:installFromFile': async (req) => {
+        const { id } = EmulatorIdSchema.parse(req);
+        if (!win) return { ok: false, error: 'No window' };
+        const pick = await dialog.showOpenDialog(win, {
+          title: `Choose the ${id} download`,
+          defaultPath: join(home, 'Downloads'),
+          properties: ['openFile'],
+          filters: [{ name: 'Downloads', extensions: ['dmg', 'zip', 'gz', 'tgz', 'app'] }],
+        });
+        const file = pick.filePaths[0];
+        if (pick.canceled || !file) return { ok: false, cancelled: true };
+        try {
+          const path = await installer.installFromFile(id, file, (p) => send('emulators:installProgress', p));
+          await settings.update({ emulators: { [id]: { appPath: path } } } as SettingsPatch);
+          return { ok: true, path };
+        } catch (err) {
+          return { ok: false, error: (err as Error).message };
+        }
+      },
       'emulators:openApp': async (req) => {
         const { id } = EmulatorIdSchema.parse(req);
         const path = getAdapter(id).installPath(settings.get());

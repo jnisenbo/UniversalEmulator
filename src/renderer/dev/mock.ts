@@ -115,6 +115,7 @@ export function createMockApi(): ArcadiaApi {
       settings = { ...settings, emulators: { ...settings.emulators, [id]: { ...settings.emulators[id], appPath: `/Users/me/Applications/${id}.app` } } };
       return { ok: true, path: `/Users/me/Applications/${id}.app` };
     },
+    'emulators:installFromFile': () => ({ ok: false, cancelled: true }),
     'emulators:openApp': () => undefined,
     'emulators:openHomepage': () => undefined,
     'art:all': () => ({}),
