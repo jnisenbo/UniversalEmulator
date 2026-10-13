@@ -11,7 +11,7 @@ fi
 # command-line tool can carry a Bluetooth usage description.
 xcrun swiftc -O \
   -target arm64-apple-macos13 \
-  -framework GameController -framework IOBluetooth \
+  -framework GameController -framework IOBluetooth -framework IOKit \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker ArcadiaHelper/Info.plist \
   -o build/arcadia-helper \
   ArcadiaHelper/main.swift

@@ -13,6 +13,7 @@
 import Foundation
 import GameController
 import IOBluetooth
+import IOKit.hid
 
 let helperVersion = "0.1.0"
 
@@ -89,6 +90,7 @@ final class ControllerMonitor {
         let color = GCColor(red: Float(r / 255), green: Float(g / 255), blue: Float(b / 255))
         lightColor = color
         for c in GCController.controllers() { c.light?.color = color }
+        dualSenseLight.set(r: UInt8(max(0, min(255, r))), g: UInt8(max(0, min(255, g))), b: UInt8(max(0, min(255, b))))
     }
 
     /// game: report Home presses (open Arcadia's in-game menu).
@@ -267,8 +269,127 @@ final class Pairer: NSObject, IOBluetoothDeviceInquiryDelegate, IOBluetoothDevic
     }
 }
 
+// MARK: - DualSense light bar (direct HID)
+
+/// Sets the DualSense light bar with the controller's own output report, over
+/// USB or Bluetooth. GameController's `light` only takes effect for the app in
+/// front, and this helper never is, so it writes to the device directly (as
+/// SDL and the Linux driver do). Layout from Linux hid-playstation.c.
+final class DualSenseLight {
+    private static let sony = 0x054C
+    private static let products = [0x0CE6, 0x0DF2] // DualSense, DualSense Edge
+
+    private let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+    private var devices: [IOHIDDevice] = []
+    private var prepared = Set<ObjectIdentifier>()
+    private var seq: UInt8 = 0
+    private var color: (UInt8, UInt8, UInt8)?
+
+    init() {
+        let matching = DualSenseLight.products.map { [kIOHIDVendorIDKey: DualSenseLight.sony, kIOHIDProductIDKey: $0] as [String: Any] }
+        IOHIDManagerSetDeviceMatchingMultiple(manager, matching as CFArray)
+        let me = Unmanaged.passUnretained(self).toOpaque()
+        IOHIDManagerRegisterDeviceMatchingCallback(manager, { ctx, _, _, device in
+            guard let ctx else { return }
+            Unmanaged<DualSenseLight>.fromOpaque(ctx).takeUnretainedValue().added(device)
+        }, me)
+        IOHIDManagerRegisterDeviceRemovalCallback(manager, { ctx, _, _, device in
+            guard let ctx else { return }
+            Unmanaged<DualSenseLight>.fromOpaque(ctx).takeUnretainedValue().removed(device)
+        }, me)
+        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        if result != kIOReturnSuccess { log("Light bar: couldn't open controllers (\(result))", level: "warn") }
+    }
+
+    func set(r: UInt8, g: UInt8, b: UInt8) {
+        color = (r, g, b)
+        for d in devices { write(d) }
+    }
+
+    private func added(_ device: IOHIDDevice) {
+        guard !devices.contains(where: { $0 === device }) else { return }
+        devices.append(device)
+        // Give the controller a moment to finish connecting before the first report.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.write(device) }
+    }
+
+    private func removed(_ device: IOHIDDevice) {
+        devices.removeAll { $0 === device }
+        prepared.remove(ObjectIdentifier(device))
+    }
+
+    private func isBluetooth(_ device: IOHIDDevice) -> Bool {
+        (IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String)?.lowercased().contains("bluetooth") ?? false
+    }
+
+    private func write(_ device: IOHIDDevice) {
+        guard let c = color, devices.contains(where: { $0 === device }) else { return }
+        let id = ObjectIdentifier(device)
+        if !prepared.contains(id) {
+            prepared.insert(id)
+            if isBluetooth(device) {
+                // Reading the calibration feature report switches a Bluetooth
+                // DualSense from its basic mode to the one that accepts output reports.
+                var feature = [UInt8](repeating: 0, count: 41)
+                feature[0] = 0x05
+                var length = CFIndex(feature.count)
+                _ = IOHIDDeviceGetReport(device, kIOHIDReportTypeFeature, 0x05, &feature, &length)
+            }
+            // Turn off the blue startup glow, which otherwise overrides the color.
+            var setup = [UInt8](repeating: 0, count: 47)
+            setup[38] = 0x02 // valid_flag2: light bar setup
+            setup[41] = 0x02 // lightbar_setup: light out
+            send(device, setup)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in self?.write(device) }
+            return
+        }
+        var common = [UInt8](repeating: 0, count: 47)
+        common[1] = 0x04 // valid_flag1: light bar color
+        common[44] = c.0
+        common[45] = c.1
+        common[46] = c.2
+        send(device, common)
+    }
+
+    /// Wraps the 47-byte common block in a USB (0x02) or Bluetooth (0x31, with CRC) report.
+    private func send(_ device: IOHIDDevice, _ common: [UInt8]) {
+        var report: [UInt8]
+        if isBluetooth(device) {
+            report = [UInt8](repeating: 0, count: 78)
+            report[0] = 0x31
+            report[1] = seq << 4
+            seq = (seq + 1) & 0x0F
+            report[2] = 0x10
+            report.replaceSubrange(3..<50, with: common)
+            let crc = DualSenseLight.crc32([0xA2] + report[0..<74])
+            report[74] = UInt8(crc & 0xFF)
+            report[75] = UInt8((crc >> 8) & 0xFF)
+            report[76] = UInt8((crc >> 16) & 0xFF)
+            report[77] = UInt8((crc >> 24) & 0xFF)
+        } else {
+            report = [0x02] + common + [UInt8](repeating: 0, count: 15) // 63 bytes
+        }
+        let bytes = report
+        let result = bytes.withUnsafeBufferPointer { buf in
+            IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, CFIndex(buf[0]), buf.baseAddress!, buf.count)
+        }
+        if result != kIOReturnSuccess { log("Light bar: report failed (\(result))", level: "warn") }
+    }
+
+    static func crc32<S: Sequence>(_ bytes: S) -> UInt32 where S.Element == UInt8 {
+        var crc: UInt32 = 0xFFFF_FFFF
+        for byte in bytes {
+            crc ^= UInt32(byte)
+            for _ in 0..<8 { crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB8_8320 : crc >> 1 }
+        }
+        return ~crc
+    }
+}
+
 // MARK: - Command loop
 
+let dualSenseLight = DualSenseLight()
 let monitor = ControllerMonitor()
 let pairer = Pairer()
 

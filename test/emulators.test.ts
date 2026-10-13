@@ -175,3 +175,12 @@ describe('emulator detection and custom apps', () => {
     expect(expandArgs('', '/g/a.nsp')).toEqual(['/g/a.nsp']);
   });
 });
+
+describe('Gatekeeper', () => {
+  it('treats an app you already approved as safe to launch', async () => {
+    const { quarantineApproved } = await import('../src/main/platform/macos/bundle');
+    expect(quarantineApproved('01c1;6acd977a;Chrome;0B64FFCE-4A29-4C22-A1C1-789A5361992B\n')).toBe(true);
+    expect(quarantineApproved('0083;6acd977a;Chrome;')).toBe(false);
+    expect(quarantineApproved('')).toBe(false);
+  });
+});

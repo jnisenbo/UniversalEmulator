@@ -78,7 +78,11 @@ export async function gatekeeperIssues(app: ResolvedApp, label: string): Promise
   }
 
   if (app.installPath.endsWith('.app')) {
-    const quarantined = (await run('/usr/bin/xattr', ['-p', 'com.apple.quarantine', app.installPath])).code === 0;
+    const q = await run('/usr/bin/xattr', ['-p', 'com.apple.quarantine', app.installPath]);
+    // Once you approve an app ("Open Anyway", or opening it from Finder), macOS
+    // keeps the quarantine attribute but sets the user-approved flag (0x40).
+    // spctl still rejects un-notarized apps after that, so it can't be the test.
+    const quarantined = q.code === 0 && !quarantineApproved(q.stdout);
     if (quarantined) {
       const assess = await run('/usr/sbin/spctl', ['--assess', '--type', 'execute', app.installPath]);
       if (assess.code !== 0) {
@@ -97,6 +101,12 @@ export async function gatekeeperIssues(app: ResolvedApp, label: string): Promise
     issues.push({ level: 'warn', message: `${label} is an Intel build and will run under Rosetta 2, which is noticeably slower.` });
   }
   return issues;
+}
+
+/** True when the quarantine flags (first field, hex) include "user approved". */
+export function quarantineApproved(value: string): boolean {
+  const flags = Number.parseInt(value.trim().split(';')[0] ?? '', 16);
+  return Number.isFinite(flags) && (flags & 0x40) !== 0;
 }
 
 /** Common install locations, used only to *suggest* paths. Nothing is hardcoded into launches. */

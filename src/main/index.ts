@@ -364,6 +364,8 @@ function wire(): void {
       }
       overlay.close();
       if (win) void restoreFocus(win);
+      // Emulators set their own light bar color during a game; put yours back.
+      helper.send({ cmd: 'setLight', ...settings.get().controller.lightBar });
     }
   });
   helper.on('status', (s) => send('controller:status', s));
