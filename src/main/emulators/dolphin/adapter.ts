@@ -5,7 +5,7 @@ import type { EmulatorAdapter } from '../adapter';
 import { detectApp } from '../status';
 import { ensureSymlink, exists, writeFileAtomic } from '../../util/fsx';
 import { parseIni, stringifyIni } from '../../util/ini';
-import { applyDolphinIni, applyGfxIni, gcPadIni, wiimoteIni } from './config';
+import { applyDolphinIni, applyGfxIni, dolphinPlayers, gcPadIni, wiimoteIni } from './config';
 
 /** Folders shared with the user's normal Dolphin setup so saves stay in one place. */
 const SHARED_DIRS = ['GC', 'Wii', 'StateSaves', 'Load', 'ScreenShots'];
@@ -48,14 +48,15 @@ export const dolphinAdapter: EmulatorAdapter = {
       warnings.push(`Dolphin's normal data folder wasn't found at ${realDir}; saves will live in Arcadia's copy.`);
     }
 
+    const players = dolphinPlayers(profile, ctx.controllers);
     const iniPath = join(configDir, 'Dolphin.ini');
     const current = (await exists(iniPath)) ? parseIni(await readFile(iniPath, 'utf8')) : new Map();
-    await writeFileAtomic(iniPath, stringifyIni(applyDolphinIni(current)));
+    await writeFileAtomic(iniPath, stringifyIni(applyDolphinIni(current, players.length)));
     const gfxPath = join(configDir, 'GFX.ini');
     const gfx = (await exists(gfxPath)) ? parseIni(await readFile(gfxPath, 'utf8')) : new Map();
     await writeFileAtomic(gfxPath, stringifyIni(applyGfxIni(gfx, ctx.settings.graphics)));
-    await writeFileAtomic(join(configDir, 'GCPadNew.ini'), stringifyIni(gcPadIni(profile)));
-    await writeFileAtomic(join(configDir, 'WiimoteNew.ini'), stringifyIni(wiimoteIni(profile)));
+    await writeFileAtomic(join(configDir, 'GCPadNew.ini'), stringifyIni(gcPadIni(profile, players)));
+    await writeFileAtomic(join(configDir, 'WiimoteNew.ini'), stringifyIni(wiimoteIni(profile, players)));
     return { warnings };
   },
 

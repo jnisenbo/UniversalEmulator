@@ -236,6 +236,14 @@ export function Settings() {
             onConfirm: () => void api.invoke('system:openSettingsPane', 'gameControllers'),
           },
           {
+            kind: 'toggle',
+            id: 'multiplayer',
+            label: 'Local multiplayer',
+            detail: `Every connected PS5 or Xbox controller becomes the next player in GameCube and Wii games, up to 4. Connected now: ${controller.controllers.length}`,
+            value: c.multiplayer,
+            onChange: (v) => void updateSettings({ controller: { multiplayer: v } }),
+          },
+          {
             kind: 'text',
             id: 'dolphin-device',
             label: 'Dolphin device name',

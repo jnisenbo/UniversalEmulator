@@ -44,27 +44,33 @@ const rumble = (p: ControllerProfile): string => (p.rumble ? `${q('Motor L')} | 
  * GameCube pad by position (see CONSOLE_BUTTONS.gamecube):
  * A = bottom (big button), B = left, X = right, Y = top, Z = R.
  */
-export function gcPadIni(p: ControllerProfile): Ini {
+export function gcPadIni(p: ControllerProfile, devices: string[] = [p.dolphinDevice]): Ini {
   const ini: Ini = new Map();
-  setIni(ini, 'GCPad1', {
-    Device: p.dolphinDevice,
-    'Buttons/A': bind(p, 'south'),
-    'Buttons/B': bind(p, 'west'),
-    'Buttons/X': bind(p, 'east'),
-    'Buttons/Y': bind(p, 'north'),
-    'Buttons/Z': bind(p, 'r1'),
-    'Buttons/Start': bind(p, 'options'),
-    ...stick('Main Stick', 'Left', p.deadzoneLeft),
-    ...stick('C-Stick', 'Right', p.deadzoneRight),
-    'Triggers/L': bind(p, 'l2'),
-    'Triggers/R': bind(p, 'r2'),
-    'Triggers/L-Analog': bind(p, 'l2'),
-    'Triggers/R-Analog': bind(p, 'r2'),
-    'Triggers/Threshold': pct(p.triggerThreshold),
-    ...dpad('D-Pad', p),
-    'Rumble/Motor': rumble(p),
-  });
-  for (const n of [2, 3, 4]) setIni(ini, `GCPad${n}`, { Device: p.dolphinDevice });
+  for (const n of [1, 2, 3, 4]) {
+    const device = devices[n - 1];
+    if (!device) {
+      setIni(ini, `GCPad${n}`, { Device: devices[0] ?? p.dolphinDevice });
+      continue;
+    }
+    setIni(ini, `GCPad${n}`, {
+      Device: device,
+      'Buttons/A': bind(p, 'south'),
+      'Buttons/B': bind(p, 'west'),
+      'Buttons/X': bind(p, 'east'),
+      'Buttons/Y': bind(p, 'north'),
+      'Buttons/Z': bind(p, 'r1'),
+      'Buttons/Start': bind(p, 'options'),
+      ...stick('Main Stick', 'Left', p.deadzoneLeft),
+      ...stick('C-Stick', 'Right', p.deadzoneRight),
+      'Triggers/L': bind(p, 'l2'),
+      'Triggers/R': bind(p, 'r2'),
+      'Triggers/L-Analog': bind(p, 'l2'),
+      'Triggers/R-Analog': bind(p, 'r2'),
+      'Triggers/Threshold': pct(p.triggerThreshold),
+      ...dpad('D-Pad', p),
+      'Rumble/Motor': rumble(p),
+    });
+  }
   return ini;
 }
 
@@ -73,7 +79,7 @@ export function gcPadIni(p: ControllerProfile): Ini {
  * controller gyro/accelerometer drive Wii motion. Home is on the touchpad
  * because the controller's Home button opens Arcadia's in-game menu.
  */
-export function wiimoteIni(p: ControllerProfile): Ini {
+export function wiimoteIni(p: ControllerProfile, devices: string[] = [p.dolphinDevice]): Ini {
   const ini: Ini = new Map();
   const motion: Record<string, string> = p.motion
     ? {
@@ -91,8 +97,8 @@ export function wiimoteIni(p: ControllerProfile): Ini {
         'IMUGyroscope/Yaw Right': q('Gyro Yaw Right'),
       }
     : {};
-  setIni(ini, 'Wiimote1', {
-    Device: p.dolphinDevice,
+  const wiimote = (device: string): Record<string, string> => ({
+    Device: device,
     Source: '1',
     'Buttons/A': bind(p, 'south'),
     'Buttons/B': bind(p, 'r2'),
@@ -121,19 +127,28 @@ export function wiimoteIni(p: ControllerProfile): Ini {
     'Nunchuk/Shake/Z': bind(p, 'l3'),
     'Rumble/Motor': rumble(p),
   });
-  for (const n of [2, 3, 4]) setIni(ini, `Wiimote${n}`, { Source: '0' });
+  for (const n of [1, 2, 3, 4]) {
+    const device = devices[n - 1];
+    setIni(ini, `Wiimote${n}`, device ? wiimote(device) : { Source: '0' });
+  }
   setIni(ini, 'BalanceBoard', { Source: '0' });
   return ini;
 }
 
 /** Keys Arcadia owns in Dolphin.ini. Everything else the user sets in Dolphin is kept. */
-export function applyDolphinIni(ini: Ini): Ini {
+export function applyDolphinIni(ini: Ini, players = 1): Ini {
   setIni(ini, 'Display', { Fullscreen: 'True' });
   // Pausing when focus leaves Dolphin means the in-game menu (Home) pauses the game.
   setIni(ini, 'Interface', { ConfirmStop: 'False', PauseOnFocusLost: 'True' });
   setIni(ini, 'Analytics', { PermissionAsked: 'True', Enabled: 'False' });
   // 6 = standard GameCube controller. AutoDiscChange swaps discs from an .m3u when the game asks.
-  setIni(ini, 'Core', { SIDevice0: '6', AutoDiscChange: 'True' });
+  setIni(ini, 'Core', {
+    SIDevice0: '6',
+    SIDevice1: players >= 2 ? '6' : '0',
+    SIDevice2: players >= 3 ? '6' : '0',
+    SIDevice3: players >= 4 ? '6' : '0',
+    AutoDiscChange: 'True',
+  });
   setIni(ini, 'BluetoothPassthrough', { Enabled: 'False' });
   return ini;
 }
@@ -146,7 +161,43 @@ export function applyGfxIni(ini: Ini, g: Graphics): Ini {
     InternalResolution: String(g.resolutionScale),
     AspectRatio: ASPECT[g.aspect],
     ShowFPS: g.showFps ? 'True' : 'False',
+    // 2 = Hybrid Ubershaders: no hitch the first time an effect is drawn.
+    // Dolphin's default (synchronous) pauses the game while each new shader compiles.
+    ShaderCompilationMode: '2',
   });
   setIni(ini, 'Hardware', { VSync: g.vsync ? 'True' : 'False' });
   return ini;
+}
+
+/** Dolphin's SDL device string for a controller name ("Xbox Wireless Controller" etc.). */
+const SDL_NAMES: [RegExp, string][] = [
+  [/dualsense edge/i, 'DualSense Edge Wireless Controller'],
+  [/dualsense/i, 'DualSense Wireless Controller'],
+  [/xbox/i, 'Xbox Wireless Controller'],
+  [/dualshock/i, 'PS4 Controller'],
+];
+export function sdlName(name: string): string {
+  for (const [re, sdl] of SDL_NAMES) if (re.test(name)) return sdl;
+  return name;
+}
+
+/**
+ * Dolphin device per player, max 4. Dolphin numbers devices per name, so two
+ * DualSense controllers are SDL/0/… and SDL/1/…, and an Xbox pad is its own SDL/0/….
+ * Player 1 keeps the device chosen in Settings when it is connected.
+ */
+export function dolphinPlayers(p: ControllerProfile, controllers: { name: string }[] = []): string[] {
+  if (!p.multiplayer) return [p.dolphinDevice];
+  const manual = p.extraDevices.filter((d) => d.trim());
+  if (manual.length) return [p.dolphinDevice, ...manual].slice(0, 4);
+  const seen = new Map<string, number>();
+  const connected = controllers.map((c) => {
+    const name = sdlName(c.name);
+    const i = seen.get(name) ?? 0;
+    seen.set(name, i + 1);
+    return `SDL/${i}/${name}`;
+  });
+  if (!connected.length) return [p.dolphinDevice];
+  const first = connected.includes(p.dolphinDevice) ? p.dolphinDevice : connected[0]!;
+  return [first, ...connected.filter((d) => d !== first)].slice(0, 4);
 }

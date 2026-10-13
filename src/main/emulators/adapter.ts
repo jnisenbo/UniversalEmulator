@@ -1,6 +1,6 @@
 import type { EmulatorId, Platform } from '@shared/platforms';
 import type { ControllerProfile, Settings } from '@shared/settings';
-import type { EmulatorStatus, Game } from '@shared/types';
+import type { ControllerInfo, EmulatorStatus, Game } from '@shared/types';
 import type { ResolvedApp } from '../platform/macos/bundle';
 
 export interface AdapterContext {
@@ -8,6 +8,8 @@ export interface AdapterContext {
   /** Arcadia-owned folder for this emulator's config (under userData). */
   managedDir: string;
   home: string;
+  /** Controllers connected right now, in the order macOS reports them. */
+  controllers?: ControllerInfo[];
 }
 
 export interface LaunchSpec {

@@ -101,7 +101,7 @@ function createWindow(): BrowserWindow {
 }
 
 function adapterContext(id: EmulatorId, s: Settings): AdapterContext {
-  return { settings: s, managedDir: join(userData, 'emulators', id), home };
+  return { settings: s, managedDir: join(userData, 'emulators', id), home, controllers: helper.status.controllers };
 }
 
 function switchKeysPath(s: Settings): string {

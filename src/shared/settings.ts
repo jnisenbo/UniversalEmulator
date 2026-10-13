@@ -20,6 +20,10 @@ export const ControllerProfileSchema = z.object({
   layout: z.partialRecord(z.enum(PAD_BUTTONS), z.enum(PAD_BUTTONS)).default({}),
   /** Device string Dolphin uses, e.g. "SDL/0/DualSense Wireless Controller". */
   dolphinDevice: z.string().default('SDL/0/DualSense Wireless Controller'),
+  /** Every connected controller becomes the next player (GameCube and Wii, up to 4). */
+  multiplayer: z.boolean().default(true),
+  /** Manual Dolphin device strings for players 2 to 4. Empty = assign automatically. */
+  extraDevices: z.array(z.string()).max(3).default([]),
 });
 export type ControllerProfile = z.infer<typeof ControllerProfileSchema>;
 
