@@ -1,20 +1,26 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ArtSearchResult, Game, GameArt } from '@shared/types';
+import type { Game, GameArt } from '@shared/types';
 import { writeFileAtomic } from '../util/fsx';
-import type { ArtKind, SteamGridDbClient } from './steamgriddb';
+import type { ArtProvider, FoundArt } from './providers';
+import type { ArtKind } from './steamgriddb';
 
 export const ART_SCHEME = 'arcadia-art';
 const KINDS: ArtKind[] = ['grid', 'hero', 'logo'];
 const RETRY_NOT_FOUND_MS = 7 * 24 * 3600 * 1000;
 const KEY_RE = /^[a-z0-9-]{1,64}$/;
+/** Bumped when new art sources are added, so "not found" results are retried once. */
+const ART_VERSION = 2;
 
 interface Entry {
   sourceId?: number;
   sourceName?: string;
+  provider?: string;
+  boxArt?: boolean;
   files: Partial<Record<ArtKind, string>>;
   fetchedAt: number;
   notFound?: boolean;
+  v?: number;
 }
 
 /** Art is shared by every dump of the same game: keyed by platform + game ID. */
@@ -58,6 +64,7 @@ export class ArtStore {
     }
     if (e.sourceId !== undefined) art.sourceId = e.sourceId;
     if (e.sourceName) art.sourceName = e.sourceName;
+    if (e.boxArt) art.boxArt = true;
     return art;
   }
 
@@ -79,20 +86,20 @@ export class ArtStore {
   needsFetch(game: Game, now = Date.now()): boolean {
     const e = this.index.get(artKey(game));
     if (!e) return true;
-    return !!e.notFound && now - e.fetchedAt > RETRY_NOT_FOUND_MS;
+    return !!e.notFound && ((e.v ?? 1) < ART_VERSION || now - e.fetchedAt > RETRY_NOT_FOUND_MS);
   }
 
   private inflight = new Map<string, Promise<unknown>>();
   private stagingCounter = 0;
 
   /**
-   * Find and download art. `sourceId` forces a specific SteamGridDB game (manual
-   * match). Fetches for the same game run one after another, never interleaved.
+   * Find and download art, trying providers in order. `sourceId` forces a specific
+   * SteamGridDB game (manual match). Fetches for the same game run one after another.
    */
-  fetch(game: Game, client: SteamGridDbClient, sourceId?: number): Promise<GameArt | null> {
+  fetch(game: Game, providers: ArtProvider[], sourceId?: number): Promise<GameArt | null> {
     const key = artKey(game);
     const previous = this.inflight.get(key) ?? Promise.resolve();
-    const next = previous.catch(() => undefined).then(() => this.fetchNow(game, client, sourceId));
+    const next = previous.catch(() => undefined).then(() => this.fetchNow(game, providers, sourceId));
     this.inflight.set(key, next);
     void next.finally(() => {
       if (this.inflight.get(key) === next) this.inflight.delete(key);
@@ -100,14 +107,30 @@ export class ArtStore {
     return next;
   }
 
-  private async fetchNow(game: Game, client: SteamGridDbClient, sourceId?: number): Promise<GameArt | null> {
+  private async fetchNow(game: Game, providers: ArtProvider[], sourceId?: number): Promise<GameArt | null> {
     const key = artKey(game);
-    let match: ArtSearchResult | undefined;
-    if (sourceId !== undefined) match = { id: sourceId, name: game.displayTitle, year: null };
-    else match = (await client.search(game.displayTitle))[0];
+    const usable = sourceId !== undefined ? providers.filter((p) => p.id === 'steamgriddb') : providers;
+    let found: FoundArt | null = null;
+    let provider: ArtProvider | null = null;
+    let lastError: Error | null = null;
+    for (const p of usable) {
+      try {
+        const f = await p.find(game, sourceId);
+        if (f?.assets.grid || f?.assets.hero) {
+          found = f;
+          provider = p;
+          break;
+        }
+      } catch (err) {
+        lastError = err as Error;
+        // A bad SteamGridDB key must surface; other providers just fall through.
+        if (p.id === 'steamgriddb' && lastError.message.includes('API key')) throw lastError;
+      }
+    }
 
-    if (!match) {
-      this.index.set(key, { files: {}, fetchedAt: Date.now(), notFound: true });
+    if (!found || !provider) {
+      if (lastError && !found) console.error(`[art] ${game.displayTitle}:`, lastError.message);
+      this.index.set(key, { files: {}, fetchedAt: Date.now(), notFound: true, v: ART_VERSION });
       await this.save();
       return null;
     }
@@ -121,9 +144,9 @@ export class ArtStore {
     const files: Entry['files'] = {};
     try {
       for (const kind of KINDS) {
-        const asset = await client.asset(match.id, kind);
-        if (!asset) continue;
-        const { data, ext } = await client.download(asset.url);
+        const url = found.assets[kind];
+        if (!url) continue;
+        const { data, ext } = await provider.download(url);
         const name = `${kind}.${ext}`;
         await writeFile(join(staging, name), data);
         files[kind] = name;
@@ -134,7 +157,16 @@ export class ArtStore {
     }
     await rm(folder, { recursive: true, force: true });
     await rename(staging, folder);
-    this.index.set(key, { sourceId: match.id, sourceName: match.name, files, fetchedAt: Date.now(), ...(Object.keys(files).length ? {} : { notFound: true }) });
+    this.index.set(key, {
+      ...(found.sourceId !== undefined ? { sourceId: found.sourceId } : {}),
+      ...(found.sourceName ? { sourceName: found.sourceName } : {}),
+      provider: found.provider,
+      ...(found.boxArt ? { boxArt: true } : {}),
+      files,
+      fetchedAt: Date.now(),
+      v: ART_VERSION,
+      ...(Object.keys(files).length ? {} : { notFound: true }),
+    });
     await this.save();
     return this.artFor(game);
   }

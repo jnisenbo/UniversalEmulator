@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, net, protocol, shell, type IpcMainInvokeEvent } from 'electron';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -10,8 +10,10 @@ import type { Settings, SettingsPatch } from '@shared/settings';
 import type { EmulatorStatus, Game, GameArt, InstallInfo, ScanSummary } from '@shared/types';
 import { ART_SCHEME, ArtStore } from './art/store';
 import { SteamGridDbClient, type Fetch } from './art/steamgriddb';
+import { freeCoverProvider, steamGridDbProvider, type ArtProvider } from './art/providers';
 import { HelperClient, type MenuButton } from './controller/helper';
-import type { AdapterContext } from './emulators/adapter';
+import type { AdapterContext, EmulatorAdapter } from './emulators/adapter';
+import { customAdapter } from './emulators/custom';
 import { allAdapters, getAdapter } from './emulators/registry';
 import { defaultRyubingDataDir } from './emulators/ryubing/adapter';
 import { CATALOG } from './install/catalog';
@@ -104,6 +106,69 @@ function adapterContext(id: EmulatorId, s: Settings): AdapterContext {
   return { settings: s, managedDir: join(userData, 'emulators', id), home, controllers: helper.status.controllers };
 }
 
+/** The console's chosen emulator: a custom app if you picked one, else the built-in adapter. */
+let currentAdapter: EmulatorAdapter | null = null;
+function adapterFor(game: Game, s: Settings): EmulatorAdapter {
+  const custom = s.customEmulators[game.platform];
+  return custom ? customAdapter(game.platform, custom) : getAdapter(game.emulator);
+}
+
+/**
+ * Installed emulators: known app names first, then any app whose name matches
+ * (e.g. "Xenia-edge.app", "PCSX2-v2.4.app") in /Applications, ~/Applications, ~/Downloads.
+ */
+async function findInstalledEmulators(): Promise<Partial<Record<EmulatorId, string>>> {
+  const found: Partial<Record<EmulatorId, string>> = {};
+  const listings = new Map<string, string[]>();
+  for (const dir of candidateAppDirs(home)) listings.set(dir, await readdir(dir).catch(() => [] as string[]));
+  for (const a of allAdapters()) {
+    outer: for (const dir of candidateAppDirs(home)) {
+      for (const name of a.bundleNames) {
+        if (await exists(join(dir, name))) {
+          found[a.id] = join(dir, name);
+          break outer;
+        }
+      }
+    }
+    if (found[a.id]) continue;
+    for (const dir of candidateAppDirs(home)) {
+      const name = listings.get(dir)?.find((n) => CATALOG[a.id].appName.test(n));
+      if (name) {
+        found[a.id] = join(dir, name);
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+/** On startup, fill in emulators that aren't set or whose saved app is gone. Never replaces a working choice. */
+async function autoConfigureEmulators(): Promise<void> {
+  const s = settings.get();
+  const found = await findInstalledEmulators();
+  const patch: Record<string, { appPath: string }> = {};
+  for (const id of EMULATOR_IDS) {
+    const current = s.emulators[id].appPath;
+    if (found[id] && (!current || !(await exists(current)))) patch[id] = { appPath: found[id]! };
+  }
+  if (Object.keys(patch).length) {
+    await settings.update({ emulators: patch } as SettingsPatch);
+    invalidateStatus();
+  }
+}
+
+/**
+ * macOS doesn't always bring a newly started app to the front when another
+ * app launched it. If Arcadia still has focus shortly after the game starts,
+ * hand focus to the emulator so its window isn't hidden behind the launcher.
+ */
+function bringEmulatorForward(): void {
+  setTimeout(() => {
+    if (session.current.kind !== 'running' || !currentAdapter || !win || win.isDestroyed() || !win.isFocused()) return;
+    void activateApp(currentAdapter.installPath(settings.get()));
+  }, 1500);
+}
+
 function switchKeysPath(s: Settings): string {
   return s.switchKeysPath ?? join(s.emulators.ryubing.dataDir ?? defaultRyubingDataDir(home), 'system', 'prod.keys');
 }
@@ -165,16 +230,24 @@ function artClient(): SteamGridDbClient | null {
   return key ? new SteamGridDbClient(key, net.fetch as unknown as Fetch) : null;
 }
 
+const freeCovers = freeCoverProvider(net.fetch as unknown as Fetch);
+
+/** SteamGridDB first when you've added a key (covers, backgrounds, logos), then free box art. */
+function artProviders(): ArtProvider[] {
+  const client = artClient();
+  return [...(client ? [steamGridDbProvider(client)] : []), freeCovers];
+}
+
 let artRunning = false;
 /** Background, one game at a time, politely spaced. Skips games that already have art. */
 async function fetchMissingArt(force = false): Promise<void> {
-  const client = artClient();
-  if (!client || (!force && !settings.get().metadata.autoFetch) || artRunning) return;
+  if ((!force && !settings.get().metadata.autoFetch) || artRunning) return;
+  const providers = artProviders();
   artRunning = true;
   try {
     for (const g of games.filter((x) => art.needsFetch(x))) {
       try {
-        const result = await art.fetch(g, client);
+        const result = await art.fetch(g, providers);
         sendArtForAllCopies(g, result);
       } catch (err) {
         console.error(`[art] ${g.displayTitle}:`, (err as Error).message);
@@ -210,7 +283,7 @@ function closeOverlay(): void {
 async function resumeGame(): Promise<void> {
   closeOverlay();
   const current = session.current;
-  if (current.kind === 'running') await activateApp(getAdapter(current.emulator).installPath(settings.get()));
+  if (current.kind === 'running') await activateApp((currentAdapter ?? getAdapter(current.emulator)).installPath(settings.get()));
 }
 
 /**
@@ -280,6 +353,7 @@ function wire(): void {
     helper.send({ cmd: 'watch', enabled: state.kind === 'running', mode: 'game' });
     setQuitShortcut(settings.get().quitShortcut, state.kind === 'running');
     hideLauncherDuringGame(state.kind === 'running');
+    if (state.kind === 'running') bringEmulatorForward();
     if (state.kind === 'ended') {
       const game = games.find((g) => g.id === state.gameId);
       if (game) {
@@ -319,21 +393,7 @@ function wire(): void {
       'library:list': () => games,
       'library:scan': () => rescan(),
       'emulators:status': () => emulatorStatuses(),
-      'emulators:autodetect': async () => {
-        const found: Partial<Record<EmulatorId, string>> = {};
-        for (const a of allAdapters()) {
-          outer: for (const dir of candidateAppDirs(home)) {
-            for (const name of a.bundleNames) {
-              const p = join(dir, name);
-              if (await exists(p)) {
-                found[a.id] = p;
-                break outer;
-              }
-            }
-          }
-        }
-        return found;
-      },
+      'emulators:autodetect': () => findInstalledEmulators(),
       'emulators:installInfo': async (req) => {
         const check = z.object({ checkLatest: z.boolean() }).parse(req).checkLatest;
         return Promise.all(
@@ -412,7 +472,8 @@ function wire(): void {
         const ctx = adapterContext(game.emulator, s);
         await mkdir(ctx.managedDir, { recursive: true });
         overlay.prepare();
-        return session.launch(game, getAdapter(game.emulator), ctx, s.controller);
+        currentAdapter = adapterFor(game, s);
+        return session.launch(game, currentAdapter, ctx, s.controller);
       },
       'game:reveal': (req) => {
         shell.showItemInFolder(findGame(GameIdSchema.parse(req).gameId).path);
@@ -448,7 +509,6 @@ function wire(): void {
       },
       'history:all': () => history.all(),
       'art:fetchMissing': () => {
-        if (!artClient()) throw new Error('Add your SteamGridDB API key first.');
         void fetchMissingArt(true);
       },
       'art:all': () => {
@@ -461,10 +521,9 @@ function wire(): void {
       },
       'art:refresh': async (req) => {
         const { gameId, sourceId } = RefreshSchema.parse(req);
-        const client = artClient();
-        if (!client) throw new Error('Add your SteamGridDB API key in Settings → Artwork.');
+        if (sourceId !== undefined && !artClient()) throw new Error('Add your SteamGridDB API key in Settings → Artwork.');
         const g = findGame(gameId);
-        const result = await art.fetch(g, client, sourceId);
+        const result = await art.fetch(g, artProviders(), sourceId);
         sendArtForAllCopies(g, result);
         return result;
       },
@@ -497,6 +556,7 @@ app.whenReady().then(async () => {
   });
   await settings.load();
   await Promise.all([cache.load(), art.load(), installer.load(), history.load()]);
+  await autoConfigureEmulators().catch((err: unknown) => console.error('[emulators] auto-detect failed:', err));
   games = sortGames(cache.games());
   wire();
   helper.start();

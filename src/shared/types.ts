@@ -1,7 +1,7 @@
 import type { EmulatorId, Platform } from './platforms';
 import type { Settings } from './settings';
 
-export type DiscFormat = 'iso' | 'rvz' | 'wia' | 'wbfs' | 'gcz' | 'nsp' | 'xci' | 'xiso' | 'xex' | 'stfs';
+export type DiscFormat = 'iso' | 'rvz' | 'wia' | 'wbfs' | 'gcz' | 'nsp' | 'xci' | 'xiso' | 'xex' | 'stfs' | 'chd' | 'cso' | 'cue' | 'folder' | 'rom';
 
 /** Cached artwork for a game, as URLs the renderer can load (arcadia-art://…). */
 export interface GameArt {
@@ -11,6 +11,8 @@ export interface GameArt {
   /** SteamGridDB game the art came from. */
   sourceId?: number;
   sourceName?: string;
+  /** Portrait box art: shown whole on tiles instead of cropped to fill. */
+  boxArt?: boolean;
 }
 
 export interface ArtSearchResult {

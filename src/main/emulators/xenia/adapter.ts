@@ -16,7 +16,7 @@ export function expandArgs(template: string, gamePath: string): string[] {
 export const xeniaAdapter: EmulatorAdapter = {
   id: 'xenia',
   platforms: ['xbox360'],
-  bundleNames: ['XeniOS.app', 'Xenia.app', 'xenia_canary.app', 'xenia.app'],
+  bundleNames: ['Xenia-edge.app', 'Xenia Edge.app', 'XeniOS.app', 'Xenia.app', 'xenia_canary.app', 'xenia.app'],
 
   installPath: (s) => s.emulators.xenia.appPath,
 

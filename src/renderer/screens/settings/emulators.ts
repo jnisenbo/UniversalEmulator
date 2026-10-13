@@ -1,4 +1,4 @@
-import { EMULATOR_IDS, EMULATOR_LABEL, PLATFORM_INFO, PLATFORMS, type EmulatorId } from '@shared/platforms';
+import { EMULATOR_IDS, EMULATOR_LABEL, PLATFORM_INFO, PLATFORMS, type EmulatorId, type Platform } from '@shared/platforms';
 import type { Settings } from '@shared/settings';
 import type { EmulatorStatus, InstallInfo, InstallProgress } from '@shared/types';
 import { isNewer } from '@shared/version';
@@ -32,6 +32,9 @@ export function emulatorRows(opts: {
   installAll(): void;
   checkUpdates(): void;
   autodetect(): void;
+  openCustom(): void;
+  setCustomArgs(platform: Platform, args: string): void;
+  removeCustom(platform: Platform): void;
 }): Row[] {
   const { settings, statuses, installs, progress } = opts;
   const missing = EMULATOR_IDS.filter((id) => !settings.emulators[id].appPath && installs.find((i) => i.id === id)?.installable);
@@ -89,5 +92,28 @@ export function emulatorRows(opts: {
     }
   }
   rows.push({ kind: 'action', id: 'check-updates', label: 'Check for emulator updates', onConfirm: opts.checkUpdates });
+
+  rows.push({
+    kind: 'action',
+    id: 'custom-add',
+    label: 'Use another emulator for a console…',
+    detail: 'Pick any emulator app for any console, for example a different Switch emulator',
+    value: 'Choose…',
+    onConfirm: opts.openCustom,
+  });
+  for (const p of PLATFORMS) {
+    const c = settings.customEmulators[p];
+    if (!c) continue;
+    const name = shortPath(c.appPath).split('/').pop()!.replace(/\.app$/i, '');
+    rows.push({
+      kind: 'text',
+      id: `custom-${p}`,
+      label: `${PLATFORM_INFO[p].label}: ${name}`,
+      detail: 'Launch options. {game} is replaced by the game file. Example: {game} --fullscreen',
+      value: c.argsTemplate,
+      onCommit: (v) => opts.setCustomArgs(p, v.trim() || '{game}'),
+    });
+    rows.push({ kind: 'action', id: `custom-${p}-remove`, label: `Use ${EMULATOR_LABEL[PLATFORM_INFO[p].emulator]} for ${PLATFORM_INFO[p].label} again`, onConfirm: () => opts.removeCustom(p) });
+  }
   return rows;
 }

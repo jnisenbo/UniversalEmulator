@@ -6,7 +6,7 @@ import type { ArtSearchResult } from '@shared/types';
  */
 const API = 'https://www.steamgriddb.com/api/v2';
 
-export type Fetch = (url: string, init?: { headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; headers: { get(name: string): string | null } }>;
+export type Fetch = (url: string, init?: { headers?: Record<string, string>; method?: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; headers: { get(name: string): string | null } }>;
 
 interface Asset {
   url: string;

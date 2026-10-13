@@ -236,8 +236,8 @@ export function Home() {
             .catch((e: Error) => setMenu({ kind: 'art', results: [], error: e.message }));
         },
       },
-      { label: 'Refresh artwork', disabled: !hasKey, run: () => void api.invoke('art:refresh', { gameId: game.id }).catch(artError) },
-      ...(game.emulator === 'xenia' ? [] : [{
+      { label: 'Refresh artwork', detail: hasKey ? undefined : 'Free box art. Add a SteamGridDB key for backgrounds and logos too', run: () => void api.invoke('art:refresh', { gameId: game.id }).catch(artError) },
+      ...(!['dolphin', 'ryubing', 'xemu'].includes(game.emulator) || settings?.customEmulators[game.platform] ? [] : [{
         label: 'Graphics for this game…',
         detail: settings?.gameGraphics[gameKey(game)] ? 'Custom settings' : 'Uses your default graphics settings',
         run: () => setMenu({ kind: 'graphics' }),

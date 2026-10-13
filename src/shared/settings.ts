@@ -60,8 +60,22 @@ export const SettingsSchema = z.object({
       xenia: z
         .object({ appPath: app, argsTemplate: z.string().default('{game} --fullscreen=true') })
         .prefault({}),
+      pcsx2: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),
+      rpcs3: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),
+      retroarch: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),
     })
     .prefault({}),
+  /**
+   * Any console can use another emulator app instead of the built-in one
+   * (for example a different Switch emulator). Arcadia just launches it with
+   * the argument template; {game} is replaced by the game's path.
+   */
+  customEmulators: z
+    .partialRecord(
+      z.enum(PLATFORMS),
+      z.object({ appPath: z.string(), name: z.string().default(''), argsTemplate: z.string().default('{game}') }),
+    )
+    .default({}),
   /** Your own prod.keys, read-only, used to identify Switch dumps. Never copied. */
   switchKeysPath: z.string().nullable().default(null),
   controller: ControllerProfileSchema.prefault({}),

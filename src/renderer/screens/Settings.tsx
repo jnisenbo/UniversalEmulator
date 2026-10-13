@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EMULATOR_LABEL, type EmulatorId } from '@shared/platforms';
+import { EMULATOR_LABEL, PLATFORM_INFO, PLATFORMS, type EmulatorId, type Platform } from '@shared/platforms';
 import { api } from '../api';
 import { useInputHandler } from '../input/useInput';
 import type { InputEvent } from '../input/actions';
@@ -41,7 +41,7 @@ const LIGHT_COLORS = [
 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
-type ModalState = { kind: 'pair' } | { kind: 'calibrate' } | { kind: 'layout' } | { kind: 'emulator'; id: EmulatorId } | null;
+type ModalState = { kind: 'pair' } | { kind: 'calibrate' } | { kind: 'layout' } | { kind: 'emulator'; id: EmulatorId } | { kind: 'custom' } | null;
 
 export function Settings() {
   const settings = useStore((s) => s.settings);
@@ -74,6 +74,17 @@ export function Settings() {
       await refreshEmulators();
     },
     [updateSettings, refreshEmulators],
+  );
+
+  const pickCustom = useCallback(
+    async (platform: Platform) => {
+      const path = await api.invoke('dialog:pick', { kind: 'app', title: `Choose the emulator for ${PLATFORM_INFO[platform].label}` });
+      if (!path) return;
+      const current = useStore.getState().settings?.customEmulators ?? {};
+      await updateSettings({ customEmulators: { ...current, [platform]: { appPath: path, name: '', argsTemplate: current[platform]?.argsTemplate ?? '{game}' } } });
+      toast({ level: 'info', title: `${PLATFORM_INFO[platform].label} games now open in ${shortPath(path).split('/').pop()?.replace(/\.app$/, '')}`, detail: 'If it needs extra options to start a game, edit its launch options in Settings → Emulators.' });
+    },
+    [updateSettings, toast],
   );
 
   const autodetect = useCallback(async () => {
@@ -153,6 +164,13 @@ export function Settings() {
               else toast({ level: 'info', title: 'Checked for updates' });
             }),
           autodetect: () => void autodetect(),
+          openCustom: () => setModal({ kind: 'custom' }),
+          setCustomArgs: (p, args) => void updateSettings({ customEmulators: { ...settings.customEmulators, [p]: { ...settings.customEmulators[p]!, argsTemplate: args } } }),
+          removeCustom: (p) => {
+            const next = { ...settings.customEmulators };
+            delete next[p];
+            void updateSettings({ customEmulators: next });
+          },
         });
       case 'library':
         return [
@@ -172,7 +190,7 @@ export function Settings() {
             kind: 'action',
             id: 'add-folder',
             label: 'Add a game folder…',
-            detail: 'Subfolders are included. Wii/GameCube (.iso .rvz .wbfs .gcz), Switch (.nsp .xci), Xbox (.iso), Xbox 360 (.iso .xex, XBLA packages)',
+            detail: 'Subfolders are included. Wii/GameCube, Switch, Xbox, Xbox 360, PS1 (.cue .chd), PS2 (.iso .chd .cso), PS3 (.iso or game folders), and N64, SNES, NES, Game Boy, GBA and Genesis ROMs',
             onConfirm: async () => {
               const p = await api.invoke('dialog:pick', { kind: 'folder', title: 'Add a game folder' });
               if (p && !settings.libraryFolders.includes(p)) {
@@ -273,14 +291,16 @@ export function Settings() {
           {
             kind: 'text',
             id: 'sgdb-key',
-            label: 'SteamGridDB API key',
-            detail: settings.metadata.steamGridDbKey ? 'Saved. Select to replace it with a new key.' : 'Free at steamgriddb.com → Preferences → API. Paste it here with the keyboard.',
+            label: 'SteamGridDB API key (optional)',
+            detail: settings.metadata.steamGridDbKey
+              ? 'Saved. Select to replace it with a new key.'
+              : 'Box art works without it. A free key from steamgriddb.com → Preferences → API adds backgrounds and logos.',
             value: settings.metadata.steamGridDbKey ? '••••••••' + settings.metadata.steamGridDbKey.slice(-4) : 'Not set',
             editValue: '',
             onCommit: (v) => void updateSettings({ metadata: { steamGridDbKey: v } }),
           },
           ...(settings.metadata.steamGridDbKey
-            ? [{ kind: 'action' as const, id: 'sgdb-remove', label: 'Remove API key', detail: 'Stops artwork downloads. Art already downloaded stays.', onConfirm: () => void updateSettings({ metadata: { steamGridDbKey: null } }) }]
+            ? [{ kind: 'action' as const, id: 'sgdb-remove', label: 'Remove API key', detail: 'Arcadia goes back to free box art. Art already downloaded stays.', onConfirm: () => void updateSettings({ metadata: { steamGridDbKey: null } }) }]
             : []),
           { kind: 'toggle', id: 'sgdb-auto', label: 'Download artwork automatically', value: settings.metadata.autoFetch, onChange: (v) => void updateSettings({ metadata: { autoFetch: v } }) },
           {
@@ -452,6 +472,17 @@ export function Settings() {
       {modal?.kind === 'calibrate' && <Calibration onClose={() => setModal(null)} />}
       {modal?.kind === 'layout' && <ButtonLayout onClose={() => setModal(null)} />}
       {modal?.kind === 'emulator' && <ActionMenu title={EMULATOR_LABEL[modal.id]} items={emulatorMenu(modal.id)} onClose={() => setModal(null)} />}
+      {modal?.kind === 'custom' && (
+        <ActionMenu
+          title="Use another emulator for…"
+          items={PLATFORMS.map((p) => ({
+            label: PLATFORM_INFO[p].label,
+            detail: settings?.customEmulators[p] ? `Now: ${shortPath(settings.customEmulators[p]!.appPath)}` : `Now: ${EMULATOR_LABEL[PLATFORM_INFO[p].emulator]}`,
+            run: () => void pickCustom(p),
+          }))}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   );
 }

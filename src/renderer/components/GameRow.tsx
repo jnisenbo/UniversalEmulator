@@ -133,6 +133,7 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
         {games.map((g, i) => {
           const art = placeholderArt(g);
           const cover = artMap[g.id]?.grid;
+          const boxArt = !!artMap[g.id]?.boxArt;
           const info = PLATFORM_INFO[g.platform];
           return (
             <div
@@ -146,7 +147,18 @@ export const GameRow = forwardRef<GameRowHandle, Props>(function GameRow({ games
               onPointerEnter={() => onHover(i)}
               onClick={() => onActivate(i)}
             >
-              {cover ? <img className="tile-cover" src={cover} alt="" draggable={false} /> : <span className="tile-monogram">{monogram(g.displayTitle)}</span>}
+              {cover ? (
+                boxArt ? (
+                  <>
+                    <img className="tile-cover tile-cover-blur" src={cover} alt="" draggable={false} aria-hidden />
+                    <img className="tile-cover" data-fit="contain" src={cover} alt="" draggable={false} />
+                  </>
+                ) : (
+                  <img className="tile-cover" src={cover} alt="" draggable={false} />
+                )
+              ) : (
+                <span className="tile-monogram">{monogram(g.displayTitle)}</span>
+              )}
               <span className="tile-platform">{info.short}</span>
               <span className="tile-title">{g.displayTitle}</span>
             </div>

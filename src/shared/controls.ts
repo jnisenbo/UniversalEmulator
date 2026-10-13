@@ -94,7 +94,20 @@ export const CONSOLE_BUTTONS: Record<Platform, Partial<Record<PadButton, string>
   switch: { east: 'A', south: 'B', north: 'X', west: 'Y', l1: 'L', r1: 'R', l2: 'ZL', r2: 'ZR', create: '−', options: '+', l3: 'L stick', r3: 'R stick', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
   xbox: { south: 'A', east: 'B', west: 'X', north: 'Y', l1: 'White', r1: 'Black', l2: 'L', r2: 'R', create: 'Back', options: 'Start', l3: 'L stick', r3: 'R stick', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
   xbox360: { south: 'A', east: 'B', west: 'X', north: 'Y', l1: 'LB', r1: 'RB', l2: 'LT', r2: 'RT', create: 'Back', options: 'Start', l3: 'LS', r3: 'RS', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  ps2: { south: 'Cross', east: 'Circle', west: 'Square', north: 'Triangle', l1: 'L1', r1: 'R1', l2: 'L2', r2: 'R2', create: 'Select', options: 'Start', l3: 'L3', r3: 'R3', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  ps3: { south: 'Cross', east: 'Circle', west: 'Square', north: 'Triangle', l1: 'L1', r1: 'R1', l2: 'L2', r2: 'R2', create: 'Select', options: 'Start', l3: 'L3', r3: 'R3', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  ps1: { south: 'Cross', east: 'Circle', west: 'Square', north: 'Triangle', l1: 'L1', r1: 'R1', l2: 'L2', r2: 'R2', create: 'Select', options: 'Start', l3: 'L3', r3: 'R3', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  n64: { south: 'A', west: 'B', l1: 'L', r1: 'R', l2: 'Z', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  snes: { east: 'A', south: 'B', north: 'X', west: 'Y', l1: 'L', r1: 'R', create: 'Select', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  nes: { east: 'A', south: 'B', create: 'Select', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  gba: { east: 'A', south: 'B', l1: 'L', r1: 'R', create: 'Select', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  gb: { east: 'A', south: 'B', create: 'Select', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  genesis: { south: 'A', east: 'B', r1: 'C', west: 'X', north: 'Y', l1: 'Z', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
 };
 
 /** Which platforms' emulators honour the layout (Xenia has no remapping). */
-export const LAYOUT_SUPPORTED: Record<Platform, boolean> = { gamecube: true, wii: true, switch: true, xbox: true, xbox360: false };
+export const LAYOUT_SUPPORTED: Record<Platform, boolean> = {
+  gamecube: true, wii: true, switch: true, xbox: true, xbox360: false,
+  // PCSX2 gets the standard layout written for you; RPCS3 and RetroArch use their own mapping.
+  ps2: false, ps3: false, ps1: false, n64: false, snes: false, nes: false, gba: false, gb: false, genesis: false,
+};

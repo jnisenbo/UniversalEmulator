@@ -15,6 +15,7 @@ import { networkReason, resolveRelease, type JsonFetch } from '../src/main/insta
 import { findApp } from '../src/main/install/installer';
 import { ArtStore, artKey } from '../src/main/art/store';
 import { SteamGridDbClient, type Fetch } from '../src/main/art/steamgriddb';
+import { steamGridDbProvider } from '../src/main/art/providers';
 import { mergeSettings as mergeOneLevel } from '../src/shared/merge';
 import type { Game } from '../src/shared/types';
 
@@ -171,7 +172,7 @@ describe('artwork', () => {
       return { ok: true, status: 200, json: async () => body, arrayBuffer: async () => png, headers: { get: () => 'image/png' } };
     };
     const store = new ArtStore(await mkdtemp(join(tmpdir(), 'arcadia-')));
-    const art = await store.fetch(game, new SteamGridDbClient('key', fetchFn));
+    const art = await store.fetch(game, [steamGridDbProvider(new SteamGridDbClient('key', fetchFn))]);
     expect(art).toMatchObject({ sourceId: 42, grid: expect.stringMatching(/^arcadia-art:\/\/wii-rmge01\/grid\?v=/), hero: expect.any(String) });
     expect(art?.logo).toBeUndefined();
     expect(store.filePath(art!.grid!)).toMatch(/grid\.png$/);
