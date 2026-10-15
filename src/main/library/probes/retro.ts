@@ -26,6 +26,8 @@ export async function probeRom(r: Reader, fileName: string): Promise<GameIdentit
   if (!platform) return null;
   if (platform === 'nes' && (await r.read(0, 4)).toString('latin1') !== 'NES\x1a') return null;
   if (platform === 'n64' && !N64_MAGIC.has((await r.read(0, 4)).toString('hex'))) return null;
+  // .md is also Markdown: a Genesis ROM says "SEGA" at 0x100 (.smd files are interleaved, so skip the check).
+  if (platform === 'genesis' && !/\.smd$/i.test(fileName) && !(await r.read(0x100, 4)).toString('latin1').startsWith('SEGA')) return null;
   if (r.size < 1024) return null;
   return { platform, format: 'rom', gameId: null, title: null, discNumber: 1, identified: true };
 }

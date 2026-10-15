@@ -129,7 +129,12 @@ export class ArtStore {
     }
 
     if (!found || !provider) {
-      if (lastError && !found) console.error(`[art] ${game.displayTitle}:`, lastError.message);
+      // A source failed (offline, server down): try again next time instead of
+      // remembering "no art" for a week.
+      if (lastError) {
+        console.error(`[art] ${game.displayTitle}:`, lastError.message);
+        return null;
+      }
       this.index.set(key, { files: {}, fetchedAt: Date.now(), notFound: true, v: ART_VERSION });
       await this.save();
       return null;

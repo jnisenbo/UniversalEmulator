@@ -129,14 +129,13 @@ export function freeCoverProvider(fetchFn: Fetch): ArtProvider {
     return p;
   };
 
+  /** false = not there; a network failure throws, so the game is retried later. */
   const isImage = async (url: string): Promise<boolean> => {
-    try {
-      const res = await fetchFn(url, { method: 'HEAD' });
-      return res.ok && (res.headers.get('content-type') ?? 'image/').startsWith('image/');
-    } catch {
-      return false;
-    }
+    const res = await fetchFn(url, { method: 'HEAD' });
+    return res.ok && (res.headers.get('content-type') ?? 'image/').startsWith('image/');
   };
+  /** The Xbox store's images are a best-effort source: a failure there just moves on. */
+  const maybeImage = (url: string): Promise<boolean> => isImage(url).catch(() => false);
 
   return {
     id: 'free',
@@ -150,7 +149,7 @@ export function freeCoverProvider(fetchFn: Fetch): ArtProvider {
       }
       if (game.platform === 'xbox360' && /^[0-9A-F]{8}$/.test(id)) {
         const url = `https://download.xbox.com/content/images/66acd000-77fe-1000-9115-d802${id.toLowerCase()}/1033/boxartlg.jpg`;
-        if (await isImage(url)) return { provider: 'xbox', sourceName: game.displayTitle, assets: { grid: url }, boxArt: true };
+        if (await maybeImage(url)) return { provider: 'xbox', sourceName: game.displayTitle, assets: { grid: url }, boxArt: true };
       }
       const system = LIBRETRO_SYSTEM[game.platform];
       if (system) {

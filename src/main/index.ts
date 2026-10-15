@@ -162,20 +162,18 @@ async function autoConfigureEmulators(): Promise<void> {
   }
 }
 
-let backingUp: Promise<BackupResult> | null = null;
-/** Copy saves to the backup folder: one emulator's after a game, or all of them. One run at a time. */
-async function backUpSaves(only?: RunnerId): Promise<BackupResult> {
-  if (backingUp) await backingUp.catch(() => undefined);
-  const s = settings.get();
-  const sources = saveSources(s, home).filter((x) => !only || x.emulator === only);
-  backingUp = backupFolder(s, home).then((folder) => backupSaves(sources, folder));
-  try {
-    const result = await backingUp;
+let backupQueue: Promise<unknown> = Promise.resolve();
+/** Copy saves to the backup folder: one emulator's after a game, or all of them. Runs one after another. */
+function backUpSaves(only?: RunnerId): Promise<BackupResult> {
+  const run = backupQueue.catch(() => undefined).then(async () => {
+    const s = settings.get();
+    const sources = saveSources(s, home).filter((x) => !only || x.emulator === only);
+    const result = await backupSaves(sources, await backupFolder(s, home));
     if (result.errors.length) console.error('[saves]', result.errors.slice(0, 5).join('\n'));
     return result;
-  } finally {
-    backingUp = null;
-  }
+  });
+  backupQueue = run;
+  return run;
 }
 
 /**

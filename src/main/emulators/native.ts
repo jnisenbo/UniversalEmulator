@@ -59,7 +59,8 @@ const steamAdapter = (game: Game): EmulatorAdapter => ({
     return {
       executable: '/bin/sh',
       args: ['-c', STEAM_WATCH_SCRIPT],
-      env: { ARCADIA_STEAM_APPID: game.steamAppId!, ARCADIA_GAME_DIR: game.steamInstallDir! },
+      // Trailing slash: "…/common/Hades/" must not match "…/common/Hades II/".
+      env: { ARCADIA_STEAM_APPID: game.steamAppId!, ARCADIA_GAME_DIR: `${game.steamInstallDir!.replace(/\/+$/, '')}/` },
     };
   },
 });

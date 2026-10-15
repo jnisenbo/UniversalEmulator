@@ -123,7 +123,10 @@ describe('retro ROMs', () => {
     nes.write('NES\x1a', 0, 'latin1');
     expect(await probeRom(bufferReader(nes), 'Zelda.nes')).toMatchObject({ platform: 'nes' });
     expect(await probeRom(bufferReader(Buffer.alloc(2048)), 'fake.nes')).toBeNull();
-    expect(await probeRom(bufferReader(Buffer.alloc(2048)), 'Sonic.md')).toMatchObject({ platform: 'genesis' });
+    const md = Buffer.alloc(2048);
+    md.write('SEGA MEGA DRIVE', 0x100, 'latin1');
+    expect(await probeRom(bufferReader(md), 'Sonic.md')).toMatchObject({ platform: 'genesis' });
+    expect(await probeRom(bufferReader(Buffer.from('# Readme\n'.repeat(200))), 'README.md')).toBeNull();
     expect(isCandidate('Mario.z64')).toBe(true);
   });
 
