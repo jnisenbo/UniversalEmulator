@@ -5,15 +5,16 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import type { EventChannel, IpcEvents } from '@shared/ipc';
-import { EMULATOR_IDS, type EmulatorId } from '@shared/platforms';
+import { EMULATOR_IDS, type EmulatorId, type RunnerId } from '@shared/platforms';
 import type { Settings, SettingsPatch } from '@shared/settings';
 import type { EmulatorStatus, Game, GameArt, InstallInfo, ScanSummary } from '@shared/types';
 import { ART_SCHEME, ArtStore } from './art/store';
 import { SteamGridDbClient, type Fetch } from './art/steamgriddb';
-import { freeCoverProvider, steamGridDbProvider, type ArtProvider } from './art/providers';
+import { appIconProvider, freeCoverProvider, steamGridDbProvider, type ArtProvider } from './art/providers';
 import { HelperClient, type MenuButton } from './controller/helper';
 import type { AdapterContext, EmulatorAdapter } from './emulators/adapter';
 import { customAdapter } from './emulators/custom';
+import { nativeAdapter } from './emulators/native';
 import { allAdapters, getAdapter } from './emulators/registry';
 import { defaultRyubingDataDir } from './emulators/ryubing/adapter';
 import { CATALOG } from './install/catalog';
@@ -102,13 +103,14 @@ function createWindow(): BrowserWindow {
   return w;
 }
 
-function adapterContext(id: EmulatorId, s: Settings): AdapterContext {
+function adapterContext(id: RunnerId, s: Settings): AdapterContext {
   return { settings: s, managedDir: join(userData, 'emulators', id), home, controllers: helper.status.controllers };
 }
 
 /** The console's chosen emulator: a custom app if you picked one, else the built-in adapter. */
 let currentAdapter: EmulatorAdapter | null = null;
 function adapterFor(game: Game, s: Settings): EmulatorAdapter {
+  if (game.emulator === 'native') return nativeAdapter(game.path);
   const custom = s.customEmulators[game.platform];
   return custom ? customAdapter(game.platform, custom) : getAdapter(game.emulator);
 }
@@ -122,19 +124,20 @@ async function findInstalledEmulators(): Promise<Partial<Record<EmulatorId, stri
   const listings = new Map<string, string[]>();
   for (const dir of candidateAppDirs(home)) listings.set(dir, await readdir(dir).catch(() => [] as string[]));
   for (const a of allAdapters()) {
+    const id = a.id as EmulatorId;
     outer: for (const dir of candidateAppDirs(home)) {
       for (const name of a.bundleNames) {
         if (await exists(join(dir, name))) {
-          found[a.id] = join(dir, name);
+          found[id] = join(dir, name);
           break outer;
         }
       }
     }
-    if (found[a.id]) continue;
+    if (found[id]) continue;
     for (const dir of candidateAppDirs(home)) {
-      const name = listings.get(dir)?.find((n) => CATALOG[a.id].appName.test(n));
+      const name = listings.get(dir)?.find((n) => CATALOG[id].appName.test(n));
       if (name) {
-        found[a.id] = join(dir, name);
+        found[id] = join(dir, name);
         break;
       }
     }
@@ -176,7 +179,7 @@ function switchKeysPath(s: Settings): string {
 async function scanOnce(): Promise<ScanSummary> {
   const s = settings.get();
   const switchHeaderKey = await loadHeaderKey(switchKeysPath(s));
-  const summary = await scanLibrary(s.libraryFolders, cache, { switchHeaderKey }, (p) => send('library:progress', p));
+  const summary = await scanLibrary(s.libraryFolders, cache, { switchHeaderKey, explicitApps: new Set(s.macGames) }, (p) => send('library:progress', p));
   games = sortGames(cache.games());
   void fetchMissingArt();
   return summary;
@@ -231,11 +234,12 @@ function artClient(): SteamGridDbClient | null {
 }
 
 const freeCovers = freeCoverProvider(net.fetch as unknown as Fetch);
+const appIcons = appIconProvider(join(userData, 'art', '.icons'));
 
 /** SteamGridDB first when you've added a key (covers, backgrounds, logos), then free box art. */
 function artProviders(): ArtProvider[] {
   const client = artClient();
-  return [...(client ? [steamGridDbProvider(client)] : []), freeCovers];
+  return [...(client ? [steamGridDbProvider(client)] : []), freeCovers, appIcons];
 }
 
 let artRunning = false;
@@ -283,7 +287,9 @@ function closeOverlay(): void {
 async function resumeGame(): Promise<void> {
   closeOverlay();
   const current = session.current;
-  if (current.kind === 'running') await activateApp((currentAdapter ?? getAdapter(current.emulator)).installPath(settings.get()));
+  if (current.kind !== 'running') return;
+  const adapter = currentAdapter ?? (current.emulator === 'native' ? null : getAdapter(current.emulator));
+  if (adapter) await activateApp(adapter.installPath(settings.get()));
 }
 
 /**
@@ -389,7 +395,8 @@ function wire(): void {
         const next = await settings.update(PatchSchema.parse(patch) as SettingsPatch);
         invalidateStatus();
         // New keys can identify Switch dumps that weren't before (cache entries record the key used).
-        if (switchKeysPath(prev) !== switchKeysPath(next)) void rescan().catch((err: unknown) => console.error('[scan]', err));
+        const macGamesChanged = JSON.stringify(prev.macGames) !== JSON.stringify(next.macGames);
+        if (switchKeysPath(prev) !== switchKeysPath(next) || macGamesChanged) void rescan().catch((err: unknown) => console.error('[scan]', err));
         return next;
       },
       'library:list': () => games,

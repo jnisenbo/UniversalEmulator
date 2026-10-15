@@ -1,7 +1,7 @@
-import type { EmulatorId, Platform } from './platforms';
+import type { EmulatorId, Platform, RunnerId } from './platforms';
 import type { Settings } from './settings';
 
-export type DiscFormat = 'iso' | 'rvz' | 'wia' | 'wbfs' | 'gcz' | 'nsp' | 'xci' | 'xiso' | 'xex' | 'stfs' | 'chd' | 'cso' | 'cue' | 'folder' | 'rom';
+export type DiscFormat = 'iso' | 'rvz' | 'wia' | 'wbfs' | 'gcz' | 'nsp' | 'xci' | 'xiso' | 'xex' | 'stfs' | 'chd' | 'cso' | 'cue' | 'folder' | 'rom' | 'app';
 
 /** Cached artwork for a game, as URLs the renderer can load (arcadia-art://…). */
 export interface GameArt {
@@ -46,7 +46,7 @@ export interface Game extends GameIdentity {
   /** Display title: header title, else a cleaned-up filename. */
   displayTitle: string;
   sizeBytes: number;
-  emulator: EmulatorId;
+  emulator: RunnerId;
   /**
    * Multi-disc games are one entry: every disc's path in disc order (this
    * entry's own path is disc 1). Absent for single-disc games.
@@ -95,10 +95,10 @@ export interface EmulatorStatus {
 
 export type SessionState =
   | { kind: 'idle' }
-  | { kind: 'launching'; gameId: string; emulator: EmulatorId }
-  | { kind: 'running'; gameId: string; emulator: EmulatorId; pid: number; startedAt: number }
-  | { kind: 'stopping'; gameId: string; emulator: EmulatorId; startedAt: number }
-  | { kind: 'ended'; gameId: string; emulator: EmulatorId; exitCode: number | null; signal: string | null; error?: string; stderrTail?: string; playedMs: number };
+  | { kind: 'launching'; gameId: string; emulator: RunnerId }
+  | { kind: 'running'; gameId: string; emulator: RunnerId; pid: number; startedAt: number }
+  | { kind: 'stopping'; gameId: string; emulator: RunnerId; startedAt: number }
+  | { kind: 'ended'; gameId: string; emulator: RunnerId; exitCode: number | null; signal: string | null; error?: string; stderrTail?: string; playedMs: number };
 
 export interface LaunchResult {
   ok: boolean;

@@ -1,4 +1,8 @@
+import { mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Platform } from '@shared/platforms';
+import { readAppInfo } from '../library/probes/macapp';
+import { run } from '../util/exec';
 import type { Game } from '@shared/types';
 import type { ArtKind, Fetch, SteamGridDbClient } from './steamgriddb';
 
@@ -169,6 +173,36 @@ export function freeCoverProvider(fetchFn: Fetch): ArtProvider {
       const type = res.headers.get('content-type') ?? '';
       const ext = type.includes('png') || url.endsWith('.png') ? 'png' : type.includes('webp') ? 'webp' : 'jpg';
       return { data: Buffer.from(await res.arrayBuffer()), ext };
+    },
+  };
+}
+
+/**
+ * Mac games: the app's own icon, used when nothing better was found.
+ * macOS's `sips` turns the .icns into a 512px PNG.
+ */
+export function appIconProvider(workDir: string): ArtProvider {
+  return {
+    id: 'app-icon',
+    async find(game) {
+      if (game.platform !== 'mac' || process.platform !== 'darwin') return null;
+      const { iconFile } = await readAppInfo(game.path);
+      const name = iconFile ? (iconFile.endsWith('.icns') ? iconFile : `${iconFile}.icns`) : 'AppIcon.icns';
+      const icon = join(game.path, 'Contents', 'Resources', name);
+      if (!(await stat(icon).catch(() => null))) return null;
+      return { provider: 'app-icon', sourceName: game.displayTitle, assets: { grid: `file://${icon}` }, boxArt: true };
+    },
+    async download(url) {
+      const icon = url.slice('file://'.length);
+      await mkdir(workDir, { recursive: true });
+      const out = join(workDir, `icon-${process.pid}-${Date.now()}.png`);
+      const r = await run('/usr/bin/sips', ['-s', 'format', 'png', '-Z', '512', icon, '--out', out]);
+      if (r.code !== 0) throw new Error(`Couldn't read the app icon: ${r.stderr.trim() || r.stdout.trim()}`);
+      try {
+        return { data: await readFile(out), ext: 'png' };
+      } finally {
+        await rm(out, { force: true });
+      }
     },
   };
 }

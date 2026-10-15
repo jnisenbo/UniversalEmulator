@@ -1,4 +1,4 @@
-import type { EmulatorId, Platform } from '@shared/platforms';
+import type { Platform, RunnerId } from '@shared/platforms';
 import type { ControllerProfile, Settings } from '@shared/settings';
 import type { ControllerInfo, EmulatorStatus, Game } from '@shared/types';
 import type { ResolvedApp } from '../platform/macos/bundle';
@@ -29,7 +29,7 @@ export interface ConfigResult {
  * registering it; nothing else in the app knows emulator specifics.
  */
 export interface EmulatorAdapter {
-  id: EmulatorId;
+  id: RunnerId;
   platforms: readonly Platform[];
   /** App bundle names used only to suggest install paths. */
   bundleNames: readonly string[];

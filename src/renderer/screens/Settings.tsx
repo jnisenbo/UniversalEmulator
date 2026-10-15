@@ -199,6 +199,32 @@ export function Settings() {
               }
             },
           },
+          {
+            kind: 'action',
+            id: 'add-mac-game',
+            label: 'Add a Mac game…',
+            detail: 'Any game app, for example a native Mac port. Game apps inside your game folders are found automatically.',
+            onConfirm: async () => {
+              const p = await api.invoke('dialog:pick', { kind: 'app', title: 'Choose a Mac game' });
+              if (p && !settings.macGames.includes(p)) {
+                await updateSettings({ macGames: [...settings.macGames, p] });
+                toast({ level: 'info', title: `Added ${shortPath(p).split('/').pop()?.replace(/\.app$/i, '')}` });
+              }
+            },
+          },
+          ...settings.macGames.map<Row>((p) => ({
+            kind: 'action',
+            id: `mac-${p}`,
+            label: shortPath(p).split('/').pop()!.replace(/\.app$/i, ''),
+            detail: `Mac game · ${shortPath(p)}`,
+            value: armedRemove === p ? 'Press again to remove' : 'Remove',
+            danger: armedRemove === p,
+            onConfirm: () => {
+              if (armedRemove !== p) return setArmedRemove(p);
+              setArmedRemove(null);
+              void updateSettings({ macGames: settings.macGames.filter((x) => x !== p) });
+            },
+          })),
           { kind: 'action', id: 'rescan', label: 'Rescan library', value: scan ? `${scan.scanned}/${scan.total}` : `${games.length} games`, onConfirm: () => void rescan() },
           {
             kind: 'action',
@@ -475,7 +501,7 @@ export function Settings() {
       {modal?.kind === 'custom' && (
         <ActionMenu
           title="Use another emulator for…"
-          items={PLATFORMS.map((p) => ({
+          items={PLATFORMS.filter((p) => p !== 'mac').map((p) => ({
             label: PLATFORM_INFO[p].label,
             detail: settings?.customEmulators[p] ? `Now: ${shortPath(settings.customEmulators[p]!.appPath)}` : `Now: ${EMULATOR_LABEL[PLATFORM_INFO[p].emulator]}`,
             run: () => void pickCustom(p),

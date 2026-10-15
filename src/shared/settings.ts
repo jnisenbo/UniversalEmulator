@@ -52,6 +52,8 @@ export const GraphicsOverrideSchema = z.object(graphicsFields).partial();
 export const SettingsSchema = z.object({
   version: z.literal(1).default(1),
   libraryFolders: z.array(z.string()).default([]),
+  /** Mac game apps added one by one (game apps inside library folders are found automatically). */
+  macGames: z.array(z.string()).default([]),
   emulators: z
     .object({
       dolphin: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),

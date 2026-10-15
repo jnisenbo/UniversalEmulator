@@ -184,3 +184,26 @@ describe('Gatekeeper', () => {
     expect(quarantineApproved('')).toBe(false);
   });
 });
+
+describe('Mac games', () => {
+  const plist = (keys: Record<string, string>): string =>
+    `<?xml version="1.0"?><plist><dict>${Object.entries(keys).map(([k, v]) => `<key>${k}</key><string>${v}</string>`).join('')}</dict></plist>`;
+  const makeApp = async (dir: string, name: string, keys: Record<string, string>): Promise<string> => {
+    const app = join(dir, name);
+    await mkdir(join(app, 'Contents', 'MacOS'), { recursive: true });
+    await writeFile(join(app, 'Contents', 'Info.plist'), plist(keys));
+    return app;
+  };
+
+  it('lists game apps with their real name and skips helpers and emulators', async () => {
+    const { probeMacApp } = await import('../src/main/library/probes/macapp');
+    const dir = await mkdtemp(join(tmpdir(), 'arcadia-mac-'));
+    const game = await makeApp(dir, 'BG3.app', { CFBundleDisplayName: "Baldur's Gate 3", CFBundleIdentifier: 'com.larian.bg3', LSApplicationCategoryType: 'public.app-category.role-playing-games' });
+    expect(await probeMacApp(game)).toMatchObject({ platform: 'mac', title: "Baldur's Gate 3", gameId: 'com.larian.bg3' });
+    const helper = await makeApp(dir, 'Uninstall.app', { CFBundleName: 'Uninstall', LSApplicationCategoryType: 'public.app-category.utilities' });
+    expect(await probeMacApp(helper)).toBeNull();
+    expect(await probeMacApp(helper, true)).toMatchObject({ platform: 'mac' });
+    const emu = await makeApp(dir, 'Dolphin.app', { CFBundleName: 'Dolphin' });
+    expect(await probeMacApp(emu)).toBeNull();
+  });
+});

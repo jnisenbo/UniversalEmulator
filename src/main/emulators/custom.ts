@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { PLATFORM_INFO, type Platform } from '@shared/platforms';
+import { PLATFORM_INFO, type EmulatorId, type Platform } from '@shared/platforms';
 import type { Settings } from '@shared/settings';
 import type { EmulatorStatus } from '@shared/types';
 import { gatekeeperIssues, resolveApp } from '../platform/macos/bundle';
@@ -24,7 +24,7 @@ export function customAdapter(platform: Platform, c: CustomEmulator): EmulatorAd
     installPath: () => c.appPath,
 
     async detect() {
-      const status: EmulatorStatus = { id: PLATFORM_INFO[platform].emulator, configured: true, installPath: c.appPath, executable: null, version: null, arch: [], issues: [] };
+      const status: EmulatorStatus = { id: PLATFORM_INFO[platform].emulator as EmulatorId, configured: true, installPath: c.appPath, executable: null, version: null, arch: [], issues: [] };
       try {
         const app = await resolveApp(c.appPath);
         Object.assign(status, { executable: app.executable, version: app.version, arch: app.arch });

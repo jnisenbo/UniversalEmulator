@@ -6,10 +6,13 @@ import { probeNsp, probeXci } from './switch';
 import { probeStfs, probeXboxIso, probeXex } from './xbox360';
 import { probeChd, probeCso, probeCue, probePlayStationDisc, probePs3Folder } from './playstation';
 import { probeRom, ROM_EXTENSIONS } from './retro';
+import { probeMacApp } from './macapp';
 
 export interface ProbeContext {
   /** Switch header_key from the user's prod.keys, if configured. */
   switchHeaderKey: Buffer | null;
+  /** Mac game apps you added one by one: always listed. */
+  explicitApps?: Set<string>;
 }
 
 export const CANDIDATE_EXTENSIONS = new Set([
@@ -57,6 +60,7 @@ export async function probeReader(r: Reader, fileName: string, ctx: ProbeContext
 
 export function probeFile(path: string, ctx: ProbeContext): Promise<GameIdentity | null> {
   const name = basename(path);
+  if (/\.app$/i.test(name)) return probeMacApp(path, ctx.explicitApps?.has(path) ?? false);
   if (/^eboot\.bin$/i.test(name)) return /[\\/]USRDIR[\\/]EBOOT\.BIN$/i.test(path) ? probePs3Folder(path) : Promise.resolve(null);
   if (/\.cue$/i.test(name)) return probeCue(path, withReader);
   return withReader(path, (r) => probeReader(r, name, ctx));

@@ -103,6 +103,7 @@ export const CONSOLE_BUTTONS: Record<Platform, Partial<Record<PadButton, string>
   gba: { east: 'A', south: 'B', l1: 'L', r1: 'R', create: 'Select', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
   gb: { east: 'A', south: 'B', create: 'Select', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
   genesis: { south: 'A', east: 'B', r1: 'C', west: 'X', north: 'Y', l1: 'Z', options: 'Start', up: 'D-pad', down: 'D-pad', left: 'D-pad', right: 'D-pad' },
+  mac: {},
 };
 
 /** Which platforms' emulators honour the layout (Xenia has no remapping). */
@@ -110,4 +111,6 @@ export const LAYOUT_SUPPORTED: Record<Platform, boolean> = {
   gamecube: true, wii: true, switch: true, xbox: true, xbox360: false,
   // PCSX2 gets the standard layout written for you; RPCS3 and RetroArch use their own mapping.
   ps2: false, ps3: false, ps1: false, n64: false, snes: false, nes: false, gba: false, gb: false, genesis: false,
+  // Mac games read the controller themselves.
+  mac: false,
 };

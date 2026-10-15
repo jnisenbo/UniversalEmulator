@@ -50,8 +50,15 @@ async function walk(root: string, out: Candidate[], errors: string[], depth: num
       isDir = !!target?.isDirectory();
       isFile = !!target?.isFile();
     }
-    if (isDir) {
-      if (depth < MAX_DEPTH && !e.name.endsWith('.app')) await walk(full, out, errors, depth + 1, seen);
+    if (isDir && e.name.endsWith('.app')) {
+      // A Mac game app: listed as a game (emulators and Arcadia itself are skipped by the probe).
+      const realApp = await realpath(full).catch(() => full);
+      if (seen.files.has(realApp)) continue;
+      seen.files.add(realApp);
+      const s = await stat(full).catch(() => null);
+      if (s) out.push({ path: full, size: 0, mtimeMs: s.mtimeMs });
+    } else if (isDir) {
+      if (depth < MAX_DEPTH) await walk(full, out, errors, depth + 1, seen);
     } else if (isFile && isCandidate(e.name)) {
       try {
         const s = await stat(full);
@@ -95,6 +102,17 @@ export async function scanLibrary(
   onProgress({ phase: 'walking', scanned: 0, total: 0 });
   const seen: WalkState = { dirs: new Map(), files: new Set() };
   for (const f of folders) await walk(f, candidates, errors, 0, seen);
+  for (const app of ctx.explicitApps ?? []) {
+    const realApp = await realpath(app).catch(() => app);
+    if (seen.files.has(realApp)) continue;
+    const s = await stat(app).catch(() => null);
+    if (!s) {
+      errors.push(`${app}: not found`);
+      continue;
+    }
+    seen.files.add(realApp);
+    candidates.push({ path: app, size: 0, mtimeMs: s.mtimeMs });
+  }
 
   const switchTag = ctx.switchHeaderKey ? createHash('sha256').update(ctx.switchHeaderKey).digest('hex').slice(0, 12) : 'no-keys';
   const before = cache.paths();
