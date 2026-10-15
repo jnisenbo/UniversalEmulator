@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { EmulatorAdapter } from '../adapter';
 import { detectApp } from '../status';
 import { ensureSymlink, exists, writeFileAtomic } from '../../util/fsx';
-import { patchRyubingConfig } from './config';
+import { addRyubingPlayers, patchRyubingConfig } from './config';
 
 const CONFIG = 'Config.json';
 
@@ -46,6 +46,7 @@ export const ryubingAdapter: EmulatorAdapter = {
 
     const source = JSON.parse(await readFile(sourceConfig, 'utf8')) as Record<string, unknown>;
     const { config, controllersUpdated, missingKeys } = patchRyubingConfig(source, profile, ctx.settings.graphics);
+    const players = addRyubingPlayers(config, ctx.controllers ?? [], profile.multiplayer);
     await writeFileAtomic(join(ctx.managedDir, CONFIG), JSON.stringify(config, null, 2));
 
     const warnings: string[] = [];
@@ -53,6 +54,9 @@ export const ryubingAdapter: EmulatorAdapter = {
       // Changes made in a Ryubing that Arcadia launched go to Arcadia's managed copy,
       // which is rebuilt each launch; the user's own config is where this must happen.
       warnings.push('Your controller isn’t set up in Ryubing yet. In Arcadia go to Settings → Emulators → Ryubing → Open Ryubing (not during a game), select your controller under Options → Settings → Input, save and quit. Arcadia keeps the mapping in sync after that.');
+    }
+    if (players.needsSetup.length && controllersUpdated > 0) {
+      warnings.push(`For multiplayer, set up your ${players.needsSetup.join(' and ')} once: Settings → Emulators → Ryubing → Open Ryubing, then Options → Settings → Input, pick it for the next player, save and quit.`);
     }
     if (missingKeys.length) warnings.push(`This Ryubing version doesn't have: ${missingKeys.join(', ')}.`);
     return { warnings };

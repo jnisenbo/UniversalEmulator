@@ -1,6 +1,7 @@
 import { resolveButton, type PadButton } from '@shared/controls';
 import { isPlainObject } from '@shared/merge';
 import type { ControllerProfile, Graphics } from '@shared/settings';
+import { sdlName } from '../dolphin/config';
 
 type Json = Record<string, unknown>;
 const isObj = isPlainObject;
@@ -88,4 +89,54 @@ export function patchRyubingConfig(source: Json, p: ControllerProfile, g?: Graph
     controllersUpdated++;
   }
   return { config, controllersUpdated, missingKeys };
+}
+
+const PLAYER_SLOTS = ['Player1', 'Player2', 'Player3', 'Player4'];
+
+export interface PlayersResult {
+  added: number;
+  /** Controller models connected now that Ryubing has never been set up with. */
+  needsSetup: string[];
+}
+
+/**
+ * Local multiplayer. Ryubing names a controller "<n>-<SDL GUID>", where n counts
+ * controllers of the same model. So once one DualSense is set up, a second one
+ * is "1-<same GUID>": Arcadia adds it as the next player with the same mapping.
+ * A model Ryubing has never seen (different GUID) has to be picked in Ryubing once.
+ */
+export function addRyubingPlayers(config: Json, controllers: { name: string }[], multiplayer: boolean): PlayersResult {
+  const result: PlayersResult = { added: 0, needsSetup: [] };
+  if (!multiplayer || controllers.length < 2 || !Array.isArray(config.input_config)) return result;
+  const inputs = config.input_config as unknown[];
+  const pads = inputs.filter((i): i is Json => isObj(i) && typeof i.backend === 'string' && i.backend.startsWith('Gamepad') && typeof i.id === 'string');
+  const used = new Set(inputs.map((i) => (isObj(i) ? i.player_index : undefined)));
+  const modelOf = (name: unknown): string => sdlName(typeof name === 'string' ? name.replace(/\s*\(\d+\)\s*$/, '') : '').toLowerCase();
+
+  const wanted = new Map<string, { label: string; count: number }>();
+  for (const c of controllers.slice(0, PLAYER_SLOTS.length)) {
+    const key = modelOf(c.name);
+    wanted.set(key, { label: sdlName(c.name), count: (wanted.get(key)?.count ?? 0) + 1 });
+  }
+
+  for (const [model, { label, count }] of wanted) {
+    const mine = pads.filter((p) => modelOf(p.name) === model);
+    const template = mine[0];
+    const guid = template ? /^\d+-(.+)$/.exec(template.id as string)?.[1] : undefined;
+    if (!template || !guid) {
+      result.needsSetup.push(label);
+      continue;
+    }
+    const ids = new Set(mine.map((p) => p.id));
+    for (let n = 0; n < count; n++) {
+      const id = `${n}-${guid}`;
+      if (ids.has(id)) continue;
+      const slot = PLAYER_SLOTS.find((s) => !used.has(s));
+      if (!slot) return result;
+      inputs.push({ ...structuredClone(template), id, player_index: slot });
+      used.add(slot);
+      result.added++;
+    }
+  }
+  return result;
 }

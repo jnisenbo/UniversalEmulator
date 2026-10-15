@@ -22,6 +22,13 @@
   font-size: clamp(12px, calc(100vh / 54), 30px);
 }
 
+/* Large and TV sizes: a bigger root size scales the whole interface. TV mode also
+   moves everything in from the edges, since many TVs crop the picture (overscan). */
+html[data-size='large'] { font-size: clamp(14px, calc(100vh / 46), 40px); }
+html[data-size='tv'] { font-size: clamp(16px, calc(100vh / 40), 56px); --gutter: 7rem; }
+html[data-size='tv'] .app { inset: 4vh 3vw; }
+html[data-size='tv'] .srow[data-focused='true'], html[data-size='tv'] .tile[data-focused='true'] { outline-width: 0.25rem; }
+
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 body {
@@ -383,3 +390,22 @@ html.overlay, html.overlay body, html.overlay #root { background: transparent; }
 .filter[data-active='true'] { color: #0a0c12; background: var(--text); }
 .home:has(.filters) .row-viewport { top: 8.2rem; }
 .hero-played { margin: -1.4rem 0 1.8rem; font-size: 0.98rem; font-weight: 550; color: var(--text-3); }
+
+/* ---------- On-screen keyboard ---------- */
+.osk { display: flex; flex-direction: column; gap: 0.55rem; width: min(60rem, 88vw); }
+.osk-field {
+  min-height: 3.2rem; padding: 0.7rem 1rem; margin-bottom: 0.6rem; border-radius: 0.7rem;
+  background: rgb(0 0 0 / 0.35); border: 1px solid var(--material-edge); font-size: 1.25rem;
+  white-space: pre-wrap; word-break: break-all;
+}
+.osk-caret { display: inline-block; width: 0.12em; height: 1.1em; margin-left: 0.05em; vertical-align: text-bottom; background: var(--accent); animation: osk-blink 1s steps(1) infinite; }
+@keyframes osk-blink { 50% { opacity: 0; } }
+.osk-row { display: flex; gap: 0.55rem; }
+.osk-key {
+  flex: 1 1 0; min-width: 0; height: 3.4rem; border: 0; border-radius: 0.65rem;
+  background: var(--material-light); color: var(--text); font: inherit; font-size: 1.2rem; font-weight: 600;
+  transition: transform 120ms ease-out, background 120ms ease-out;
+}
+.osk-key[data-on='true'] { background: rgb(122 167 255 / 0.35); }
+.osk-key[data-focused='true'] { background: var(--text); color: var(--bg); transform: scale(1.06); }
+@media (prefers-reduced-motion: reduce) { .osk-key { transition: none; } .osk-caret { animation: none; } }

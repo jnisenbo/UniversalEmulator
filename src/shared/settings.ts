@@ -106,6 +106,8 @@ export const SettingsSchema = z.object({
       sounds: z.boolean().default(true),
       volume: z.number().min(0).max(1).default(0.5),
       backgroundDrift: z.boolean().default(false),
+      /** Interface size: standard for a laptop, large or TV for the couch. TV also keeps clear of the screen edges. */
+      size: z.enum(['standard', 'large', 'tv']).default('standard'),
       sort: z.enum(['recent', 'title']).default('recent'),
       filter: z.enum(['all', ...PLATFORMS]).default('all'),
     })

@@ -10,6 +10,12 @@ import { Toasts } from './components/Toasts';
 export function App() {
   const ready = useStore((s) => s.ready);
   const screen = useStore((s) => s.screen);
+  const size = useStore((s) => s.settings?.ui.size ?? 'standard');
+
+  // Interface size scales every rem: see html[data-size] in styles.css.
+  useEffect(() => {
+    document.documentElement.dataset.size = size;
+  }, [size]);
   const [pointer, setPointer] = useState(false);
 
   // Bottom of the input stack: L/R switch between the top-level screens.

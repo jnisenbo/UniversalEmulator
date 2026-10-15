@@ -270,3 +270,31 @@ describe('PS1 multi-disc', () => {
     expect(ff7.discPaths).toEqual(['/g/Final Fantasy VII (USA) (Disc 1).chd', '/g/Final Fantasy VII (USA) (Disc 2).chd']);
   });
 });
+
+describe('Switch and Xbox multiplayer', () => {
+  const ds = { name: 'DualSense Wireless Controller' };
+  const xb = { name: 'Xbox Wireless Controller' };
+  const guid = '00000005-054c-0000-e60c-000000016800';
+
+  it('adds a second DualSense to Ryubing as player 2 with the same mapping', async () => {
+    const { addRyubingPlayers } = await import('../src/main/emulators/ryubing/config');
+    const config = { input_config: [{ backend: 'GamepadSDL2', id: `0-${guid}`, name: 'DualSense Wireless Controller', player_index: 'Player1', controller_type: 'ProController', left_joycon: { button_l: 'LeftShoulder' } }] };
+    const r = addRyubingPlayers(config, [ds, ds, xb], true);
+    expect(r).toEqual({ added: 1, needsSetup: ['Xbox Wireless Controller'] });
+    expect(config.input_config[1]).toMatchObject({ id: `1-${guid}`, player_index: 'Player2', controller_type: 'ProController', left_joycon: { button_l: 'LeftShoulder' } });
+    expect(addRyubingPlayers(config, [ds, ds], true).added).toBe(0);
+    expect(addRyubingPlayers({ input_config: [] }, [ds, ds], false).added).toBe(0);
+  });
+
+  it('clears xemu ports so connected controllers seat in order', async () => {
+    const { setXemuPorts } = await import('../src/main/emulators/xemu/config');
+    const multi: Record<string, any> = { input: { bindings: { port1: 'aaa', port2: 'gone', port1_driver: 'usb-xbox-gamepad' } } };
+    setXemuPorts(multi, true);
+    expect(multi.input.bindings).toMatchObject({ port1: '', port2: '', port3: '', port4: '', port1_driver: 'usb-xbox-gamepad' });
+    expect(multi.input.auto_bind).toBe(true);
+    const single: Record<string, any> = { input: { bindings: { port1: 'aaa', port2: 'bbb' } } };
+    setXemuPorts(single, false);
+    expect(single.input.bindings).toMatchObject({ port1: 'aaa', port2: '' });
+    expect(single.input.auto_bind).toBe(false);
+  });
+});

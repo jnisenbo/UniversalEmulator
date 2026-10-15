@@ -48,6 +48,7 @@ export interface IpcRequests {
   'game:reveal': { req: { gameId: string }; res: void };
   'saves:backupNow': { req: void; res: { copied: number; bytes: number; errors: string[]; folder: string } };
   'saves:folder': { req: void; res: string };
+  'clipboard:readText': { req: void; res: string };
   'overlay:resume': { req: void; res: void };
   'overlay:quitGame': { req: void; res: void };
 }
@@ -99,6 +100,7 @@ export const REQUEST_CHANNELS = [
   'game:reveal',
   'saves:backupNow',
   'saves:folder',
+  'clipboard:readText',
   'overlay:resume',
   'overlay:quitGame',
 ] as const satisfies readonly RequestChannel[];

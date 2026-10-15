@@ -5,7 +5,7 @@ import { PAD_LABEL } from '@shared/controls';
 import type { EmulatorAdapter } from '../adapter';
 import { detectApp } from '../status';
 import { exists, writeFileAtomic } from '../../util/fsx';
-import { patchXemuConfig } from './config';
+import { patchXemuConfig, setXemuPorts } from './config';
 
 /** SDL_GetPrefPath("xemu", "xemu") on macOS. */
 export const defaultXemuDataDir = (home: string): string => join(home, 'Library', 'Application Support', 'xemu', 'xemu');
@@ -36,6 +36,7 @@ export const xemuAdapter: EmulatorAdapter = {
     if (!(await exists(source))) throw new Error('Open xemu once and set up your BIOS and hard disk files before launching Xbox games from Arcadia.');
     const { config, mappingsUpdated, missingFiles, skippedButtons } = patchXemuConfig(parse(await readFile(source, 'utf8')), profile, ctx.settings.graphics);
     if (missingFiles.length) throw new Error(`xemu is missing ${missingFiles.join(', ')}. Set them in xemu → Machine → System.`);
+    setXemuPorts(config, profile.multiplayer);
     await mkdir(ctx.managedDir, { recursive: true });
     await writeFileAtomic(join(ctx.managedDir, CONFIG), stringify(config));
 

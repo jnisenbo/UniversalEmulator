@@ -128,6 +128,7 @@ export function createMockApi(): ArcadiaApi {
       ];
     },
     'saves:backupNow': () => ({ copied: 3, bytes: 4096, errors: [], folder: '/Users/me/Documents/Arcadia Saves' }),
+    'clipboard:readText': () => '',
     'saves:folder': () => '/Users/me/Documents/Arcadia Saves',
     'game:reveal': () => undefined,
     'overlay:resume': () => undefined,

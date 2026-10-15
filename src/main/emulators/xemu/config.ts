@@ -90,3 +90,16 @@ export function patchXemuConfig(source: Toml, p: ControllerProfile, g: Graphics)
   }
   return { config, mappingsUpdated, missingFiles, skippedButtons: [...skippedButtons] };
 }
+
+/**
+ * Controller ports. xemu remembers which controller (by GUID) sits in each
+ * port, and a remembered controller that isn't connected blocks its port.
+ * Multiplayer: clear every port so auto-bind seats connected controllers in
+ * order (first one is player 1). Single player: keep port 1, clear the rest.
+ */
+export function setXemuPorts(config: Toml, multiplayer: boolean): void {
+  const bindings = table(config, ['input', 'bindings']);
+  const first = multiplayer ? 1 : 2;
+  for (let n = first; n <= 4; n++) bindings[`port${n}`] = '';
+  table(config, ['input']).auto_bind = multiplayer || !bindings.port1;
+}

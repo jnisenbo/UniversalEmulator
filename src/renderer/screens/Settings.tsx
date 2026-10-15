@@ -12,6 +12,7 @@ import { adjustRow, isFocusable, RowView, type Row } from '../components/setting
 import { PairWizard } from '../components/controller/PairWizard';
 import { Calibration } from '../components/controller/Calibration';
 import { ButtonLayout } from '../components/controller/ButtonLayout';
+import { OnScreenKeyboard } from '../components/OnScreenKeyboard';
 import { isNewer } from '@shared/version';
 import { emulatorRows, isInstalling, shortPath } from './settings/emulators';
 import { ASPECT_LABEL, ASPECTS, RES_LABEL } from './settings/graphicsOptions';
@@ -41,7 +42,7 @@ const LIGHT_COLORS = [
 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
-type ModalState = { kind: 'pair' } | { kind: 'calibrate' } | { kind: 'layout' } | { kind: 'emulator'; id: EmulatorId } | { kind: 'custom' } | null;
+type ModalState = { kind: 'pair' } | { kind: 'calibrate' } | { kind: 'layout' } | { kind: 'emulator'; id: EmulatorId } | { kind: 'custom' } | { kind: 'keyboard'; rowId: string } | null;
 
 export function Settings() {
   const settings = useStore((s) => s.settings);
@@ -394,6 +395,15 @@ export function Settings() {
             index: settings.ui.sort === 'title' ? 1 : 0,
             onChange: (i) => void updateSettings({ ui: { sort: i === 1 ? 'title' : 'recent' } }),
           },
+          {
+            kind: 'choice',
+            id: 'size',
+            label: 'Interface size',
+            detail: 'TV: bigger text, a margin for TV edges, and typing with the controller',
+            options: [{ label: 'Standard' }, { label: 'Large' }, { label: 'TV' }],
+            index: ['standard', 'large', 'tv'].indexOf(settings.ui.size),
+            onChange: (i) => void updateSettings({ ui: { size: (['standard', 'large', 'tv'] as const)[i]! } }),
+          },
           { kind: 'toggle', id: 'sounds', label: 'Interface sounds', value: settings.ui.sounds, onChange: (v) => void updateSettings({ ui: { sounds: v } }) },
           { kind: 'slider', id: 'volume', label: 'Sound volume', value: settings.ui.volume, min: 0, max: 1, step: 0.1, format: pct, onChange: (v) => void updateSettings({ ui: { volume: v } }) },
           { kind: 'toggle', id: 'drift', label: 'Background motion', detail: 'Slow drift on the background art. Off by default.', value: settings.ui.backgroundDrift, onChange: (v) => void updateSettings({ ui: { backgroundDrift: v } }) },
@@ -480,7 +490,11 @@ export function Settings() {
           play('confirm');
           if (row.kind === 'action') row.onConfirm();
           else if (row.kind === 'toggle') row.onChange(!row.value);
-          else if (row.kind === 'text') setEditing(row.id);
+          // A controller (or TV mode) gets the on-screen keyboard; a physical keyboard types in place.
+          else if (row.kind === 'text') {
+            if (e.source === 'key' && settings?.ui.size !== 'tv') setEditing(row.id);
+            else setModal({ kind: 'keyboard', rowId: row.id });
+          }
           return true;
         case 'back':
           play('back');
@@ -491,7 +505,7 @@ export function Settings() {
           return false;
       }
     },
-    [modal, editing, rows, current, col, section, focusable, setScreen],
+    [modal, editing, rows, current, col, section, focusable, setScreen, settings?.ui.size],
   );
 
   useInputHandler(handle);
@@ -541,6 +555,22 @@ export function Settings() {
       {modal?.kind === 'calibrate' && <Calibration onClose={() => setModal(null)} />}
       {modal?.kind === 'layout' && <ButtonLayout onClose={() => setModal(null)} />}
       {modal?.kind === 'emulator' && <ActionMenu title={EMULATOR_LABEL[modal.id]} items={emulatorMenu(modal.id)} onClose={() => setModal(null)} />}
+      {modal?.kind === 'keyboard' &&
+        (() => {
+          const row = rows.find((r) => r.id === modal.rowId);
+          if (!row || row.kind !== 'text') return null;
+          const initial = row.editValue ?? row.value;
+          return (
+            <OnScreenKeyboard
+              title={row.label}
+              initial={initial}
+              onDone={(v) => {
+                if (v.trim() !== initial.trim()) row.onCommit(v.trim());
+              }}
+              onClose={() => setModal(null)}
+            />
+          );
+        })()}
       {modal?.kind === 'custom' && (
         <ActionMenu
           title="Use another emulator for…"

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, net, protocol, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, net, protocol, shell, type IpcMainInvokeEvent } from 'electron';
 import { mkdir, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -567,6 +567,8 @@ function wire(): void {
       },
       'saves:backupNow': () => backUpSaves(),
       'saves:folder': async () => backupFolder(settings.get(), home),
+      // For the on-screen keyboard's Paste key (e.g. an API key copied on your phone via Universal Clipboard).
+      'clipboard:readText': async () => String(await clipboard.readText()).slice(0, 2000),
       'overlay:resume': () => resumeGame(),
       'overlay:quitGame': () => {
         closeOverlay();
