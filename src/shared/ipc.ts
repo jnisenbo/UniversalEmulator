@@ -46,6 +46,8 @@ export interface IpcRequests {
   'art:refresh': { req: { gameId: string; sourceId?: number }; res: GameArt | null };
   'art:search': { req: { gameId: string; term?: string }; res: ArtSearchResult[] };
   'game:reveal': { req: { gameId: string }; res: void };
+  'saves:backupNow': { req: void; res: { copied: number; bytes: number; errors: string[]; folder: string } };
+  'saves:folder': { req: void; res: string };
   'overlay:resume': { req: void; res: void };
   'overlay:quitGame': { req: void; res: void };
 }
@@ -95,6 +97,8 @@ export const REQUEST_CHANNELS = [
   'art:refresh',
   'art:search',
   'game:reveal',
+  'saves:backupNow',
+  'saves:folder',
   'overlay:resume',
   'overlay:quitGame',
 ] as const satisfies readonly RequestChannel[];

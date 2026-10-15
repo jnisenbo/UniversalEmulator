@@ -1,6 +1,15 @@
 import type { Game } from '@shared/types';
 
-const MULTI_DISC_PLATFORMS = new Set(['gamecube', 'wii']);
+import { titleFromPath } from './title';
+
+const MULTI_DISC_PLATFORMS = new Set(['gamecube', 'wii', 'ps1']);
+
+/**
+ * GameCube/Wii discs of one game share a game ID. PS1 discs each have their
+ * own serial, so they're matched by file name minus the "(Disc N)" tag.
+ */
+const groupKey = (g: Game): string | null =>
+  g.platform === 'ps1' ? (g.discNumber > 0 ? `ps1|${titleFromPath(g.path).toLowerCase()}|${g.path.slice(0, g.path.lastIndexOf('/'))}` : null) : g.gameId ? `${g.platform}|${g.gameId}` : null;
 
 /**
  * GameCube games that span discs share one game ID; the disc number differs.
@@ -12,11 +21,11 @@ export function groupDiscs(games: Game[]): Game[] {
   const groups = new Map<string, Game[]>();
   const out: Game[] = [];
   for (const g of games) {
-    if (!MULTI_DISC_PLATFORMS.has(g.platform) || !g.gameId) {
+    const key = MULTI_DISC_PLATFORMS.has(g.platform) ? groupKey(g) : null;
+    if (!key) {
       out.push(g);
       continue;
     }
-    const key = `${g.platform}|${g.gameId}`;
     const group = groups.get(key);
     if (group) group.push(g);
     else groups.set(key, [g]);

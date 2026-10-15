@@ -1,7 +1,9 @@
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EmulatorAdapter } from '../adapter';
 import { detectApp } from '../status';
-import { exists } from '../../util/fsx';
+import { exists, writeFileAtomic } from '../../util/fsx';
+import { RPCS3_PROFILE, rpcs3Devices, rpcs3InputYaml } from './config';
 
 export const defaultRpcs3DataDir = (home: string): string => join(home, 'Library', 'Application Support', 'rpcs3');
 
@@ -27,11 +29,22 @@ export const rpcs3Adapter: EmulatorAdapter = {
     return status;
   },
 
-  async writeConfig() {
+  /**
+   * Writes an "Arcadia" input profile (every connected controller, your button
+   * layout and light color) in both places RPCS3 has kept them over the years.
+   */
+  async writeConfig(ctx, profile) {
+    const dataDir = ctx.settings.emulators.rpcs3.dataDir ?? defaultRpcs3DataDir(ctx.home);
+    const yaml = rpcs3InputYaml(profile, rpcs3Devices(profile, ctx.controllers ?? []));
+    for (const base of [join(dataDir, 'config'), dataDir]) {
+      const dir = join(base, 'input_configs', 'global');
+      await mkdir(dir, { recursive: true });
+      await writeFileAtomic(join(dir, `${RPCS3_PROFILE}.yml`), yaml);
+    }
     return { warnings: [] };
   },
 
   getLaunchArgs(game, app) {
-    return { executable: app.executable, args: ['--no-gui', '--fullscreen', game.path] };
+    return { executable: app.executable, args: ['--no-gui', '--fullscreen', '--input-config', RPCS3_PROFILE, game.path] };
   },
 };

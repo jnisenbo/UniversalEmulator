@@ -13,6 +13,8 @@ export interface ProbeContext {
   switchHeaderKey: Buffer | null;
   /** Mac game apps you added one by one: always listed. */
   explicitApps?: Set<string>;
+  /** Installed Steam games with a Mac app, keyed by the app's path. */
+  steamGames?: Map<string, import('../steam').SteamGame>;
 }
 
 export const CANDIDATE_EXTENSIONS = new Set([
@@ -60,8 +62,30 @@ export async function probeReader(r: Reader, fileName: string, ctx: ProbeContext
 
 export function probeFile(path: string, ctx: ProbeContext): Promise<GameIdentity | null> {
   const name = basename(path);
+  const steam = ctx.steamGames?.get(path);
+  if (steam) {
+    return Promise.resolve({
+      platform: 'mac',
+      format: 'app',
+      gameId: `steam-${steam.appId}`,
+      title: steam.name,
+      discNumber: 1,
+      identified: true,
+      steamAppId: steam.appId,
+      steamInstallDir: steam.installDir,
+    });
+  }
   if (/\.app$/i.test(name)) return probeMacApp(path, ctx.explicitApps?.has(path) ?? false);
   if (/^eboot\.bin$/i.test(name)) return /[\\/]USRDIR[\\/]EBOOT\.BIN$/i.test(path) ? probePs3Folder(path) : Promise.resolve(null);
-  if (/\.cue$/i.test(name)) return probeCue(path, withReader);
-  return withReader(path, (r) => probeReader(r, name, ctx));
+  if (/\.cue$/i.test(name)) {
+    return probeCue(path, withReader).then((id) => {
+      const disc = /\(Disc (\d+)/i.exec(name);
+      return id && disc ? { ...id, discNumber: Number(disc[1]) } : id;
+    });
+  }
+  return withReader(path, (r) => probeReader(r, name, ctx)).then((id) => {
+    // PS1 multi-disc sets are separate files named "(Disc 1)", "(Disc 2)"…
+    const disc = /\(Disc (\d+)/i.exec(name);
+    return id && disc && (id.platform === 'ps1' || id.platform === 'ps2') ? { ...id, discNumber: Number(disc[1]) } : id;
+  });
 }

@@ -1,4 +1,5 @@
-import type { EmulatorStatus } from '@shared/types';
+import type { EmulatorStatus, Game } from '@shared/types';
+import { STEAM_WATCH_SCRIPT } from '../library/steam';
 import { gatekeeperIssues, resolveApp } from '../platform/macos/bundle';
 import type { EmulatorAdapter } from './adapter';
 
@@ -6,7 +7,9 @@ import type { EmulatorAdapter } from './adapter';
  * Native Mac games: Arcadia starts the game app itself, waits for it to quit,
  * then comes back. No emulator and no config to write.
  */
-export const nativeAdapter = (appPath: string): EmulatorAdapter => ({
+export const nativeAdapter = (game: Game): EmulatorAdapter => (game.steamAppId ? steamAdapter(game) : appAdapter(game.path));
+
+const appAdapter = (appPath: string): EmulatorAdapter => ({
   id: 'native',
   platforms: ['mac'],
   bundleNames: [],
@@ -30,5 +33,33 @@ export const nativeAdapter = (appPath: string): EmulatorAdapter => ({
 
   getLaunchArgs(_game, app) {
     return { executable: app.executable, args: [] };
+  },
+});
+
+/**
+ * Steam games start through Steam (DRM, overlay, cloud saves). A small shell
+ * script asks Steam to start the game, then waits until the game quits.
+ */
+const steamAdapter = (game: Game): EmulatorAdapter => ({
+  id: 'native',
+  platforms: ['mac'],
+  bundleNames: [],
+  // Not the game's .app: activating that would start it outside Steam.
+  installPath: () => '/bin/sh',
+
+  async detect() {
+    return { id: 'native', configured: true, installPath: '/bin/sh', executable: '/bin/sh', version: null, arch: [], issues: [] } as unknown as EmulatorStatus;
+  },
+
+  async writeConfig() {
+    return { warnings: [] };
+  },
+
+  getLaunchArgs() {
+    return {
+      executable: '/bin/sh',
+      args: ['-c', STEAM_WATCH_SCRIPT],
+      env: { ARCADIA_STEAM_APPID: game.steamAppId!, ARCADIA_GAME_DIR: game.steamInstallDir! },
+    };
   },
 });

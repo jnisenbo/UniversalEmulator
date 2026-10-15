@@ -54,6 +54,16 @@ export const SettingsSchema = z.object({
   libraryFolders: z.array(z.string()).default([]),
   /** Mac game apps added one by one (game apps inside library folders are found automatically). */
   macGames: z.array(z.string()).default([]),
+  /** List installed Steam games that have a Mac version, launched through Steam. */
+  steamImport: z.boolean().default(true),
+  saves: z
+    .object({
+      /** Copy every emulator's saves to one folder after each game. */
+      backup: z.boolean().default(true),
+      /** Backup folder; null = iCloud Drive/Arcadia Saves (or Documents if iCloud Drive is off). */
+      folder: z.string().nullable().default(null),
+    })
+    .prefault({}),
   emulators: z
     .object({
       dolphin: z.object({ appPath: app, dataDir: z.string().nullable().default(null) }).prefault({}),

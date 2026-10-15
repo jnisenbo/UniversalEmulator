@@ -207,3 +207,63 @@ describe('Mac games', () => {
     expect(await probeMacApp(emu)).toBeNull();
   });
 });
+
+describe('RPCS3 controllers', () => {
+  it('writes one SDL pad per controller, numbered per name from 1', async () => {
+    const { rpcs3Devices, rpcs3InputYaml } = await import('../src/main/emulators/rpcs3/config');
+    const p = ControllerProfileSchema.parse({});
+    const devices = rpcs3Devices(p, [{ name: 'DualSense Wireless Controller' }, { name: 'Xbox Wireless Controller' }, { name: 'DualSense Wireless Controller' }]);
+    expect(devices).toEqual(['DualSense Wireless Controller 1', 'Xbox Wireless Controller 1', 'DualSense Wireless Controller 2']);
+    const yaml = rpcs3InputYaml(p, devices);
+    expect(yaml).toContain('Player 1 Input:\n  Handler: SDL\n  Device: "DualSense Wireless Controller 1"');
+    expect(yaml).toContain('    Cross: "South"');
+    expect(yaml).toContain('    L2: "LT"');
+    expect(yaml).toContain('Player 4 Input:\n  Handler: "Null"');
+    expect(rpcs3Devices({ ...p, multiplayer: false }, [{ name: 'DualSense Wireless Controller' }, { name: 'Xbox Wireless Controller' }])).toHaveLength(1);
+  });
+});
+
+describe('Steam import', () => {
+  it('finds installed Mac games and their app, skipping tools', async () => {
+    const { findSteamGames } = await import('../src/main/library/steam');
+    const home = await mkdtemp(join(tmpdir(), 'arcadia-steam-'));
+    const steamapps = join(home, 'Library', 'Application Support', 'Steam', 'steamapps');
+    await mkdir(join(steamapps, 'common', 'Hades', 'Hades.app', 'Contents'), { recursive: true });
+    await mkdir(join(steamapps, 'common', 'Hades', 'Uninstall.app'), { recursive: true });
+    await mkdir(join(steamapps, 'common', 'Steamworks Shared'), { recursive: true });
+    const acf = (id: string, name: string, dir: string, flags = '4'): string => `"AppState"\n{\n\t"appid"\t\t"${id}"\n\t"name"\t\t"${name}"\n\t"StateFlags"\t\t"${flags}"\n\t"installdir"\t\t"${dir}"\n}\n`;
+    await writeFile(join(steamapps, 'appmanifest_1145360.acf'), acf('1145360', 'Hades', 'Hades'));
+    await writeFile(join(steamapps, 'appmanifest_228980.acf'), acf('228980', 'Steamworks Common Redistributables', 'Steamworks Shared'));
+    const games = await findSteamGames(home);
+    expect(games).toEqual([{ appId: '1145360', name: 'Hades', installDir: join(steamapps, 'common', 'Hades'), appPath: join(steamapps, 'common', 'Hades', 'Hades.app') }]);
+  });
+});
+
+describe('save backups', () => {
+  it('copies new and changed saves and never deletes from the backup', async () => {
+    const { backupSaves } = await import('../src/main/saves/backup');
+    const { rm, readFile: read } = await import('node:fs/promises');
+    const root = await mkdtemp(join(tmpdir(), 'arcadia-saves-'));
+    const src = join(root, 'memcards');
+    await mkdir(src, { recursive: true });
+    await writeFile(join(src, 'Mcd001.ps2'), 'slot one');
+    const dest = join(root, 'backup');
+    const sources = [{ emulator: 'pcsx2' as const, label: 'PCSX2/Memory cards', dir: src }, { emulator: 'pcsx2' as const, label: 'PCSX2/Missing', dir: join(root, 'nope') }];
+    expect(await backupSaves(sources, dest)).toMatchObject({ copied: 1, errors: [] });
+    expect(await backupSaves(sources, dest)).toMatchObject({ copied: 0 });
+    await rm(join(src, 'Mcd001.ps2'));
+    await backupSaves(sources, dest);
+    expect(await read(join(dest, 'PCSX2', 'Memory cards', 'Mcd001.ps2'), 'utf8')).toBe('slot one');
+  });
+});
+
+describe('PS1 multi-disc', () => {
+  it('groups discs by name and keeps disc order', async () => {
+    const { groupDiscs } = await import('../src/main/library/discs');
+    const g = (file: string, disc: number, id: string) => ({ id: file, path: `/g/${file}`, platform: 'ps1', gameId: id, discNumber: disc, displayTitle: 'Final Fantasy VII' }) as unknown as import('../src/shared/types').Game;
+    const out = groupDiscs([g('Final Fantasy VII (USA) (Disc 2).chd', 2, 'SCUS-94164'), g('Final Fantasy VII (USA) (Disc 1).chd', 1, 'SCUS-94163'), g('Crash Bandicoot (USA).chd', 1, 'SCUS-94900')]);
+    const ff7 = out.find((x) => x.path.includes('Final'))!;
+    expect(out).toHaveLength(2);
+    expect(ff7.discPaths).toEqual(['/g/Final Fantasy VII (USA) (Disc 1).chd', '/g/Final Fantasy VII (USA) (Disc 2).chd']);
+  });
+});

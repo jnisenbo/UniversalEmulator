@@ -15,6 +15,8 @@ import { HelperClient, type MenuButton } from './controller/helper';
 import type { AdapterContext, EmulatorAdapter } from './emulators/adapter';
 import { customAdapter } from './emulators/custom';
 import { nativeAdapter } from './emulators/native';
+import { findSteamGames } from './library/steam';
+import { backupFolder, backupSaves, saveSources, type BackupResult } from './saves/backup';
 import { allAdapters, getAdapter } from './emulators/registry';
 import { defaultRyubingDataDir } from './emulators/ryubing/adapter';
 import { CATALOG } from './install/catalog';
@@ -110,7 +112,7 @@ function adapterContext(id: RunnerId, s: Settings): AdapterContext {
 /** The console's chosen emulator: a custom app if you picked one, else the built-in adapter. */
 let currentAdapter: EmulatorAdapter | null = null;
 function adapterFor(game: Game, s: Settings): EmulatorAdapter {
-  if (game.emulator === 'native') return nativeAdapter(game.path);
+  if (game.emulator === 'native') return nativeAdapter(game);
   const custom = s.customEmulators[game.platform];
   return custom ? customAdapter(game.platform, custom) : getAdapter(game.emulator);
 }
@@ -160,6 +162,22 @@ async function autoConfigureEmulators(): Promise<void> {
   }
 }
 
+let backingUp: Promise<BackupResult> | null = null;
+/** Copy saves to the backup folder: one emulator's after a game, or all of them. One run at a time. */
+async function backUpSaves(only?: RunnerId): Promise<BackupResult> {
+  if (backingUp) await backingUp.catch(() => undefined);
+  const s = settings.get();
+  const sources = saveSources(s, home).filter((x) => !only || x.emulator === only);
+  backingUp = backupFolder(s, home).then((folder) => backupSaves(sources, folder));
+  try {
+    const result = await backingUp;
+    if (result.errors.length) console.error('[saves]', result.errors.slice(0, 5).join('\n'));
+    return result;
+  } finally {
+    backingUp = null;
+  }
+}
+
 /**
  * macOS doesn't always bring a newly started app to the front when another
  * app launched it. If Arcadia still has focus shortly after the game starts,
@@ -179,7 +197,13 @@ function switchKeysPath(s: Settings): string {
 async function scanOnce(): Promise<ScanSummary> {
   const s = settings.get();
   const switchHeaderKey = await loadHeaderKey(switchKeysPath(s));
-  const summary = await scanLibrary(s.libraryFolders, cache, { switchHeaderKey, explicitApps: new Set(s.macGames) }, (p) => send('library:progress', p));
+  const steamGames = s.steamImport ? await findSteamGames(home).catch((err: unknown) => (console.error('[steam]', err), [])) : [];
+  const summary = await scanLibrary(
+    s.libraryFolders,
+    cache,
+    { switchHeaderKey, explicitApps: new Set(s.macGames), steamGames: new Map(steamGames.map((g) => [g.appPath, g])) },
+    (p) => send('library:progress', p),
+  );
   games = sortGames(cache.games());
   void fetchMissingArt();
   return summary;
@@ -370,6 +394,7 @@ function wire(): void {
       }
       overlay.close();
       if (win) void restoreFocus(win);
+      if (settings.get().saves.backup && state.emulator !== 'native') void backUpSaves(state.emulator);
       // Emulators set their own light bar color during a game; put yours back.
       helper.send({ cmd: 'setLight', ...settings.get().controller.lightBar });
     }
@@ -395,7 +420,7 @@ function wire(): void {
         const next = await settings.update(PatchSchema.parse(patch) as SettingsPatch);
         invalidateStatus();
         // New keys can identify Switch dumps that weren't before (cache entries record the key used).
-        const macGamesChanged = JSON.stringify(prev.macGames) !== JSON.stringify(next.macGames);
+        const macGamesChanged = JSON.stringify(prev.macGames) !== JSON.stringify(next.macGames) || prev.steamImport !== next.steamImport;
         if (switchKeysPath(prev) !== switchKeysPath(next) || macGamesChanged) void rescan().catch((err: unknown) => console.error('[scan]', err));
         return next;
       },
@@ -542,6 +567,8 @@ function wire(): void {
         if (!client) throw new Error('Add your SteamGridDB API key in Settings → Artwork.');
         return client.search(term || findGame(gameId).displayTitle);
       },
+      'saves:backupNow': () => backUpSaves(),
+      'saves:folder': async () => backupFolder(settings.get(), home),
       'overlay:resume': () => resumeGame(),
       'overlay:quitGame': () => {
         closeOverlay();

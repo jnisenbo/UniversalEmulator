@@ -225,6 +225,49 @@ export function Settings() {
               void updateSettings({ macGames: settings.macGames.filter((x) => x !== p) });
             },
           })),
+          {
+            kind: 'toggle',
+            id: 'steam',
+            label: 'Steam games',
+            detail: 'Lists installed Steam games that have a Mac version. They start through Steam, so cloud saves and achievements still work.',
+            value: settings.steamImport,
+            onChange: (v) => void updateSettings({ steamImport: v }),
+          },
+          {
+            kind: 'toggle',
+            id: 'save-backup',
+            label: 'Back up saves after each game',
+            detail: `Copies every emulator's saves and save states to ${settings.saves.folder ? shortPath(settings.saves.folder) : 'iCloud Drive → Arcadia Saves (or Documents if iCloud Drive is off)'}. Nothing in the backup is ever deleted.`,
+            value: settings.saves.backup,
+            onChange: (v) => void updateSettings({ saves: { backup: v } }),
+          },
+          {
+            kind: 'action',
+            id: 'save-folder',
+            label: 'Save backup folder',
+            value: settings.saves.folder ? 'Change…' : 'Choose…',
+            detail: settings.saves.folder ? shortPath(settings.saves.folder) : 'Default: iCloud Drive, so your saves follow you to another Mac',
+            onConfirm: async () => {
+              const p = await api.invoke('dialog:pick', { kind: 'folder', title: 'Choose where to keep save backups' });
+              if (p) await updateSettings({ saves: { folder: p } });
+            },
+          },
+          {
+            kind: 'action',
+            id: 'save-now',
+            label: 'Back up saves now',
+            onConfirm: () =>
+              void api
+                .invoke('saves:backupNow')
+                .then((r) =>
+                  toast({
+                    level: r.errors.length ? 'warn' : 'info',
+                    title: r.copied ? `Backed up ${r.copied} file${r.copied === 1 ? '' : 's'}` : 'Saves are already backed up',
+                    detail: r.errors.length ? `${r.errors.length} file(s) couldn't be copied. ${r.errors[0]}` : shortPath(r.folder),
+                  }),
+                )
+                .catch((e: Error) => toast({ level: 'error', title: 'Backup failed', detail: e.message })),
+          },
           { kind: 'action', id: 'rescan', label: 'Rescan library', value: scan ? `${scan.scanned}/${scan.total}` : `${games.length} games`, onConfirm: () => void rescan() },
           {
             kind: 'action',

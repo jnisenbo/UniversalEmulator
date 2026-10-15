@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Platform } from '@shared/platforms';
 import type { Settings } from '@shared/settings';
@@ -33,6 +34,8 @@ export function coresDir(s: Settings, home: string): string {
   return join(dataDir, 'cores');
 }
 
+const playlistPath = (game: { id: string }, managedDir: string): string => join(managedDir, 'Playlists', `${game.id}.m3u`);
+
 export function findCore(platform: Platform, dir: string): string | null {
   for (const name of CORES[platform]?.names ?? []) {
     const p = join(dir, `${name}_libretro.dylib`);
@@ -66,10 +69,16 @@ export const retroarchAdapter: EmulatorAdapter = {
     if (!findCore(game.platform, coresDir(ctx.settings, ctx.home))) {
       throw new Error(`RetroArch needs the ${CORES[game.platform]?.label ?? ''} core for this game. Open RetroArch → Load Core → Download a Core and get it, then try again.`);
     }
+    // Multi-disc games boot from an .m3u so the core can swap discs (RetroArch: Quick Menu → Disc Control).
+    if (game.discPaths) {
+      await mkdir(join(ctx.managedDir, 'Playlists'), { recursive: true });
+      await writeFile(playlistPath(game, ctx.managedDir), game.discPaths.join('\n') + '\n');
+    }
   },
 
   getLaunchArgs(game, app, ctx) {
     const core = findCore(game.platform, coresDir(ctx.settings, ctx.home));
-    return { executable: app.executable, args: ['-f', ...(core ? ['-L', core] : []), game.path] };
+    const boot = game.discPaths ? playlistPath(game, ctx.managedDir) : game.path;
+    return { executable: app.executable, args: ['-f', ...(core ? ['-L', core] : []), boot] };
   },
 };

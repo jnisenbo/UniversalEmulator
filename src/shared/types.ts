@@ -34,6 +34,9 @@ export interface GameIdentity {
   identified: boolean;
   /** Something the user should know before launching (e.g. needs conversion). */
   note?: string;
+  /** Steam games: launched through Steam with this app ID; the install folder is watched to see when you quit. */
+  steamAppId?: string;
+  steamInstallDir?: string;
   /** Switch only: base game, update or DLC. Only base games are listed. */
   contentKind?: 'base' | 'update' | 'dlc';
 }

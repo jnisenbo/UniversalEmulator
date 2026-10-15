@@ -102,7 +102,7 @@ export async function scanLibrary(
   onProgress({ phase: 'walking', scanned: 0, total: 0 });
   const seen: WalkState = { dirs: new Map(), files: new Set() };
   for (const f of folders) await walk(f, candidates, errors, 0, seen);
-  for (const app of ctx.explicitApps ?? []) {
+  for (const app of [...(ctx.explicitApps ?? []), ...(ctx.steamGames?.keys() ?? [])]) {
     const realApp = await realpath(app).catch(() => app);
     if (seen.files.has(realApp)) continue;
     const s = await stat(app).catch(() => null);
@@ -124,7 +124,8 @@ export async function scanLibrary(
   const worker = async (): Promise<void> => {
     for (let c = queue.shift(); c; c = queue.shift()) {
       // Switch results depend on the user's keys: re-probe when the keys change.
-      const probeTag = /\.(nsp|xci)$/i.test(c.path) ? switchTag : undefined;
+      const steam = ctx.steamGames?.get(c.path);
+      const probeTag = steam ? `steam-${steam.appId}` : /\.(nsp|xci)$/i.test(c.path) ? switchTag : undefined;
       const hit = cache.lookup(c.path, c.size, c.mtimeMs, probeTag);
       let entry: CacheEntry;
       if (hit) {

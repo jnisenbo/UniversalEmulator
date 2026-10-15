@@ -127,6 +127,8 @@ export function createMockApi(): ArcadiaApi {
         { id: 3, name: `${g?.displayTitle ?? 'Game'} HD`, year: 2019 },
       ];
     },
+    'saves:backupNow': () => ({ copied: 3, bytes: 4096, errors: [], folder: '/Users/me/Documents/Arcadia Saves' }),
+    'saves:folder': () => '/Users/me/Documents/Arcadia Saves',
     'game:reveal': () => undefined,
     'overlay:resume': () => undefined,
     'overlay:quitGame': () => undefined,
