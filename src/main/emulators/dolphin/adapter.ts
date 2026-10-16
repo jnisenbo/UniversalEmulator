@@ -32,7 +32,7 @@ export const dolphinAdapter: EmulatorAdapter = {
    * Arcadia runs Dolphin with its own user folder (-u). Config/ is ours;
    * saves, NAND and state folders are symlinked to the normal Dolphin folder.
    */
-  async writeConfig(ctx, profile) {
+  async writeConfig(ctx, profile, game) {
     const warnings: string[] = [];
     const userDir = ctx.managedDir;
     const configDir = join(userDir, 'Config');
@@ -56,7 +56,7 @@ export const dolphinAdapter: EmulatorAdapter = {
     const gfx = (await exists(gfxPath)) ? parseIni(await readFile(gfxPath, 'utf8')) : new Map();
     await writeFileAtomic(gfxPath, stringifyIni(applyGfxIni(gfx, ctx.settings.graphics)));
     await writeFileAtomic(join(configDir, 'GCPadNew.ini'), stringifyIni(gcPadIni(profile, players)));
-    await writeFileAtomic(join(configDir, 'WiimoteNew.ini'), stringifyIni(wiimoteIni(profile, players)));
+    await writeFileAtomic(join(configDir, 'WiimoteNew.ini'), stringifyIni(wiimoteIni(profile, players, game?.gameId)));
     return { warnings };
   },
 

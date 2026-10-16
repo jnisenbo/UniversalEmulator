@@ -298,3 +298,20 @@ describe('Switch and Xbox multiplayer', () => {
     expect(single.input.auto_bind).toBe(false);
   });
 });
+
+describe('Twilight Princess layout', () => {
+  it('puts every motion on a button and turns motion sensing off', async () => {
+    const { wiimoteIni } = await import('../src/main/emulators/dolphin/config');
+    const p = ControllerProfileSchema.parse({});
+    const tp = wiimoteIni(p, [p.dolphinDevice], 'RZDE01').get('Wiimote1')!;
+    expect(tp.get('Shake/X')).toBe('`Button W`'); // Square: sword
+    expect(tp.get('Nunchuk/Shake/X')).toBe('`Button E`'); // Circle: spin attack
+    expect(tp.get('Nunchuk/Swing/Forward')).toBe('`Button N`'); // Triangle: shield attack
+    expect(tp.get('Nunchuk/Buttons/Z')).toBe('`Trigger L`');
+    expect(tp.get('IR/Recenter')).toBe('`Thumb R`');
+    expect([...tp.keys()].some((k) => k.startsWith('IMU'))).toBe(false);
+    // European disc uses the same layout; other games keep the general one.
+    expect(wiimoteIni(p, [p.dolphinDevice], 'RZDP01').get('Wiimote1')!.get('Shake/X')).toBe('`Button W`');
+    expect(wiimoteIni(p, [p.dolphinDevice], 'SMNE01').get('Wiimote1')!.get('Shake/X')).toBe('`Button E`');
+  });
+});

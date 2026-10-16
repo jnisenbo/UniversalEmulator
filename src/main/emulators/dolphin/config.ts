@@ -79,8 +79,9 @@ export function gcPadIni(p: ControllerProfile, devices: string[] = [p.dolphinDev
  * controller gyro/accelerometer drive Wii motion. Home is on the touchpad
  * because the controller's Home button opens Arcadia's in-game menu.
  */
-export function wiimoteIni(p: ControllerProfile, devices: string[] = [p.dolphinDevice]): Ini {
+export function wiimoteIni(p: ControllerProfile, devices: string[] = [p.dolphinDevice], gameId?: string | null): Ini {
   const ini: Ini = new Map();
+  const preset = gameId ? WII_PRESETS[gameId.slice(0, 3).toUpperCase()] : undefined;
   const motion: Record<string, string> = p.motion
     ? {
         'IMUAccelerometer/Up': q('Accel Up'),
@@ -129,11 +130,62 @@ export function wiimoteIni(p: ControllerProfile, devices: string[] = [p.dolphinD
   });
   for (const n of [1, 2, 3, 4]) {
     const device = devices[n - 1];
-    setIni(ini, `Wiimote${n}`, device ? wiimote(device) : { Source: '0' });
+    setIni(ini, `Wiimote${n}`, device ? (preset ? preset.build(p, device) : wiimote(device)) : { Source: '0' });
   }
   setIni(ini, 'BalanceBoard', { Source: '0' });
   return ini;
 }
+
+/**
+ * Wii games whose controls don't fit the general layout get their own,
+ * keyed by the first three characters of the disc ID (any region).
+ */
+export interface WiiPreset {
+  build(p: ControllerProfile, device: string): Record<string, string>;
+}
+
+const shake = (prefix: string, value: string): Record<string, string> => ({ [`${prefix}/X`]: value, [`${prefix}/Y`]: value, [`${prefix}/Z`]: value });
+
+/**
+ * The Legend of Zelda: Twilight Princess (Wii). Every motion gets a button:
+ * sword (shake Wii Remote), spin attack (shake Nunchuk) and shield attack
+ * (thrust Nunchuk forward). Motion sensing is off so moving the controller
+ * never swings the sword by accident. The right stick aims, R3 recenters it.
+ */
+/** Shown to you in the game's Options menu: @shared/presets WII_PRESET_INFO.RZD. */
+const TWILIGHT_PRINCESS: WiiPreset = {
+  build: (p, device) => ({
+    Device: device,
+    Source: '1',
+    'Buttons/A': bind(p, 'south'),
+    'Buttons/B': bind(p, 'r2'),
+    'Buttons/1': bind(p, 'r1'),
+    'Buttons/2': bind(p, 'touchpad'),
+    'Buttons/-': bind(p, 'create'),
+    'Buttons/+': bind(p, 'options'),
+    'Buttons/Home': '',
+    ...dpad('D-Pad', p),
+    'IR/Up': q('Right Y+'),
+    'IR/Down': q('Right Y-'),
+    'IR/Left': q('Right X-'),
+    'IR/Right': q('Right X+'),
+    'IR/Dead Zone': pct(p.deadzoneRight),
+    'IR/Relative Input': 'True',
+    'IR/Recenter': bind(p, 'r3'),
+    ...shake('Shake', bind(p, 'west')),
+    Extension: 'Nunchuk',
+    'Nunchuk/Buttons/C': bind(p, 'l1'),
+    'Nunchuk/Buttons/Z': bind(p, 'l2'),
+    ...stick('Nunchuk/Stick', 'Left', p.deadzoneLeft),
+    ...shake('Nunchuk/Shake', bind(p, 'east')),
+    'Nunchuk/Swing/Forward': bind(p, 'north'),
+    'Rumble/Motor': rumble(p),
+  }),
+};
+
+export const WII_PRESETS: Record<string, WiiPreset> = {
+  RZD: TWILIGHT_PRINCESS,
+};
 
 /** Keys Arcadia owns in Dolphin.ini. Everything else the user sets in Dolphin is kept. */
 export function applyDolphinIni(ini: Ini, players = 1): Ini {

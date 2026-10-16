@@ -15,6 +15,8 @@ export function App() {
   // Interface size scales every rem: see html[data-size] in styles.css.
   useEffect(() => {
     document.documentElement.dataset.size = size;
+    // Parts measured in pixels (the tile row) re-measure on resize.
+    window.dispatchEvent(new Event('resize'));
   }, [size]);
   const [pointer, setPointer] = useState(false);
 

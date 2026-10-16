@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EMULATOR_LABEL, PLATFORM_INFO, PLATFORMS } from '@shared/platforms';
+import { presetFor } from '@shared/presets';
 import { api } from '../api';
 import { placeholderArt } from '../art/placeholder';
 import { gameName } from '../art/name';
@@ -242,6 +243,12 @@ export function Home() {
         detail: settings?.gameGraphics[gameKey(game)] ? 'Custom settings' : 'Uses your default graphics settings',
         run: () => setMenu({ kind: 'graphics' }),
       }]),
+      ...(() => {
+        const preset = presetFor(game.platform, game.gameId);
+        return preset
+          ? [{ label: `${preset.name} controls`, detail: 'This game has its own button layout', run: () => toast({ level: 'info', title: `${preset.name} controls`, detail: preset.controls.join('\n') }) }]
+          : [];
+      })(),
       { label: 'Show in Finder', detail: game.discPaths ? `${game.discPaths.length} discs · ${game.path}` : game.path, run: () => void api.invoke('game:reveal', { gameId: game.id }) },
     ];
   }

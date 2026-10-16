@@ -55,7 +55,7 @@ export class SessionManager extends EventEmitter<{ state: [SessionState] }> {
       const blocking = status.issues.find((i) => i.level === 'error');
       if (blocking) return fail(blocking.message);
       const appInfo = await resolveApp(installPath);
-      ({ warnings } = await adapter.writeConfig(ctx, profile));
+      ({ warnings } = await adapter.writeConfig(ctx, profile, game));
       await adapter.prepareGame?.(game, ctx);
       spec = adapter.getLaunchArgs(game, appInfo, ctx);
     } catch (err) {

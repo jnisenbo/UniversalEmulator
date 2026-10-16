@@ -22,12 +22,25 @@
   font-size: clamp(12px, calc(100vh / 54), 30px);
 }
 
-/* Large and TV sizes: a bigger root size scales the whole interface. TV mode also
-   moves everything in from the edges, since many TVs crop the picture (overscan). */
-html[data-size='large'] { font-size: clamp(14px, calc(100vh / 46), 40px); }
-html[data-size='tv'] { font-size: clamp(16px, calc(100vh / 40), 56px); --gutter: 7rem; }
-html[data-size='tv'] .app { inset: 4vh 3vw; }
-html[data-size='tv'] .srow[data-focused='true'], html[data-size='tv'] .tile[data-focused='true'] { outline-width: 0.25rem; }
+/* Large and TV sizes. The layout is sized in rem against the window height, so a
+   bigger root size alone would push the game details into the tile row. These
+   sizes grow the root a little and tighten the vertical spacing to match.
+   TV also keeps text and controls clear of the screen edges (many TVs crop
+   them); the background art still fills the screen. */
+:root { --safe-top: 0px; --safe-bottom: 0px; }
+html[data-size='large'] { font-size: clamp(13px, calc(100vh / 49), 34px); }
+html[data-size='tv'] { font-size: clamp(14px, calc(100vh / 47), 40px); --gutter: max(5rem, 5vw); --safe-top: 3.5vh; --safe-bottom: 3.5vh; }
+html[data-size='large'] .topbar, html[data-size='tv'] .topbar { top: var(--safe-top); }
+html[data-size='large'] .filters, html[data-size='tv'] .filters { top: calc(4.6rem + var(--safe-top)); }
+html[data-size='large'] .row-viewport, html[data-size='tv'] .row-viewport,
+html[data-size='large'] .home:has(.filters) .row-viewport, html[data-size='tv'] .home:has(.filters) .row-viewport { top: calc(7.6rem + var(--safe-top)); height: 13rem; }
+html[data-size='large'] .hero-info, html[data-size='tv'] .hero-info { bottom: calc(5rem + var(--safe-bottom)); }
+html[data-size='large'] .hero-meta, html[data-size='tv'] .hero-meta { margin: 0.7rem 0 1.4rem; }
+html[data-size='large'] .hero-played, html[data-size='tv'] .hero-played { margin: -1rem 0 1.4rem; }
+html[data-size='large'] .hints, html[data-size='tv'] .hints,
+html[data-size='large'] .scan-chip, html[data-size='tv'] .scan-chip { bottom: calc(1.8rem + var(--safe-bottom)); }
+html[data-size='large'] .settings-body, html[data-size='tv'] .settings-body { inset: calc(5.6rem + var(--safe-top)) var(--gutter) calc(4.8rem + var(--safe-bottom)); }
+html[data-size='tv'] .modal { max-height: calc(100vh - var(--safe-top) - var(--safe-bottom)); }
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
