@@ -148,8 +148,8 @@ const shake = (prefix: string, value: string): Record<string, string> => ({ [`${
 
 /**
  * The Legend of Zelda: Twilight Princess (Wii). Every motion gets a button:
- * sword (shake Wii Remote), spin attack (shake Nunchuk) and shield attack
- * (thrust Nunchuk forward). Motion sensing is off so moving the controller
+ * sword (swing Wii Remote), spin attack (shake Nunchuk) and shield attack
+ * (thrust Nunchuk forward, while locked on with Z). Motion sensing is off so moving the controller
  * never swings the sword by accident. The right stick aims, R3 recenters it.
  */
 /** Shown to you in the game's Options menu: @shared/presets WII_PRESET_INFO.RZD. */
@@ -172,6 +172,9 @@ const TWILIGHT_PRINCESS: WiiPreset = {
     'IR/Dead Zone': pct(p.deadzoneRight),
     'IR/Relative Input': 'True',
     'IR/Recenter': bind(p, 'r3'),
+    // The game reads a sword attack from a Wii Remote swing, not a shake (a shake does nothing),
+    // so Square swings sideways; the shake stays as a backup.
+    'Swing/Right': bind(p, 'west'),
     ...shake('Shake', bind(p, 'west')),
     Extension: 'Nunchuk',
     'Nunchuk/Buttons/C': bind(p, 'l1'),

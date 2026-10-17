@@ -304,7 +304,8 @@ describe('Twilight Princess layout', () => {
     const { wiimoteIni } = await import('../src/main/emulators/dolphin/config');
     const p = ControllerProfileSchema.parse({});
     const tp = wiimoteIni(p, [p.dolphinDevice], 'RZDE01').get('Wiimote1')!;
-    expect(tp.get('Shake/X')).toBe('`Button W`'); // Square: sword
+    expect(tp.get('Swing/Right')).toBe('`Button W`'); // Square: sword is a swing in this game
+    expect(tp.get('Shake/X')).toBe('`Button W`');
     expect(tp.get('Nunchuk/Shake/X')).toBe('`Button E`'); // Circle: spin attack
     expect(tp.get('Nunchuk/Swing/Forward')).toBe('`Button N`'); // Triangle: shield attack
     expect(tp.get('Nunchuk/Buttons/Z')).toBe('`Trigger L`');
