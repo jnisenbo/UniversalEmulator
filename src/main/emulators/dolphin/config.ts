@@ -144,6 +144,13 @@ export interface WiiPreset {
   build(p: ControllerProfile, device: string): Record<string, string>;
 }
 
+/** Swing at Dolphin's top speed (default 16 m/s), return fast (default 2), shake twice as often (default 6 Hz). */
+const FAST_MOTION = (swing: string, shakeGroup: string): Record<string, string> => ({
+  [`${swing}/Speed`]: '40',
+  [`${swing}/Return Speed`]: '12',
+  [`${shakeGroup}/Frequency`]: '12',
+});
+
 const shake = (prefix: string, value: string): Record<string, string> => ({ [`${prefix}/X`]: value, [`${prefix}/Y`]: value, [`${prefix}/Z`]: value });
 
 /**
@@ -176,12 +183,17 @@ const TWILIGHT_PRINCESS: WiiPreset = {
     // so Square swings sideways; the shake stays as a backup.
     'Swing/Right': bind(p, 'west'),
     ...shake('Shake', bind(p, 'west')),
+    // Dolphin plays a button-driven motion at a set speed; at its defaults a quick
+    // tap ends before the game sees a swing. Fastest swing, quicker return and a
+    // faster shake make a single tap count.
+    ...FAST_MOTION('Swing', 'Shake'),
     Extension: 'Nunchuk',
     'Nunchuk/Buttons/C': bind(p, 'l1'),
     'Nunchuk/Buttons/Z': bind(p, 'l2'),
     ...stick('Nunchuk/Stick', 'Left', p.deadzoneLeft),
     ...shake('Nunchuk/Shake', bind(p, 'east')),
     'Nunchuk/Swing/Forward': bind(p, 'north'),
+    ...FAST_MOTION('Nunchuk/Swing', 'Nunchuk/Shake'),
     'Rumble/Motor': rumble(p),
   }),
 };

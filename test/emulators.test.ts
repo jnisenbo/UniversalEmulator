@@ -310,6 +310,9 @@ describe('Twilight Princess layout', () => {
     expect(tp.get('Nunchuk/Swing/Forward')).toBe('`Button N`'); // Triangle: shield attack
     expect(tp.get('Nunchuk/Buttons/Z')).toBe('`Trigger L`');
     expect(tp.get('IR/Recenter')).toBe('`Thumb R`');
+    expect(tp.get('Swing/Speed')).toBe('40');
+    expect(tp.get('Nunchuk/Swing/Speed')).toBe('40');
+    expect(tp.get('Nunchuk/Shake/Frequency')).toBe('12');
     expect([...tp.keys()].some((k) => k.startsWith('IMU'))).toBe(false);
     // European disc uses the same layout; other games keep the general one.
     expect(wiimoteIni(p, [p.dolphinDevice], 'RZDP01').get('Wiimote1')!.get('Shake/X')).toBe('`Button W`');
