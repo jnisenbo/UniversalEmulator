@@ -33,7 +33,7 @@ describe('Dolphin multiplayer', () => {
     const players = dolphinPlayers(p, [ds, xb]);
     const gc = gcPadIni(p, players);
     expect(gc.get('GCPad2')!.get('Device')).toBe('SDL/0/Xbox Wireless Controller');
-    expect(gc.get('GCPad2')!.get('Buttons/A')).toBe('`Button S`');
+    expect(gc.get('GCPad2')!.get('Buttons/A')).toContain('`SDL/0/Xbox Wireless Controller:Button S`');
     expect(gc.get('GCPad3')!.has('Buttons/A')).toBe(false);
     const wm = wiimoteIni(p, players);
     expect(wm.get('Wiimote2')!.get('Source')).toBe('1');

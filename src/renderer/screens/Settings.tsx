@@ -13,6 +13,7 @@ import { PairWizard } from '../components/controller/PairWizard';
 import { Calibration } from '../components/controller/Calibration';
 import { ButtonLayout } from '../components/controller/ButtonLayout';
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard';
+import { playerOrder } from '@shared/players';
 import { isNewer } from '@shared/version';
 import { emulatorRows, isInstalling, shortPath } from './settings/emulators';
 import { ASPECT_LABEL, ASPECTS, RES_LABEL } from './settings/graphicsOptions';
@@ -331,6 +332,12 @@ export function Settings() {
             value: c.multiplayer,
             onChange: (v) => void updateSettings({ controller: { multiplayer: v } }),
           },
+          // Which controller is which player in the next game (connection order; yours stays player 1).
+          ...playerOrder(c, controller.controllers).map<Row>((idx, n) => {
+            const pad = controller.controllers[idx]!;
+            const battery = pad.battery !== null ? ` · ${Math.round(pad.battery * 100)}%${pad.charging ? ' charging' : ''}` : '';
+            return { kind: 'info', id: `player-${n}`, label: `Player ${n + 1}: ${pad.name}${battery}`, level: 'ok' };
+          }),
           {
             kind: 'text',
             id: 'dolphin-device',

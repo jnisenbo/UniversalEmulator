@@ -104,6 +104,9 @@ export function PairWizard({ onClose }: { onClose(): void }) {
                 Press <b>Start pairing</b>, then hold <b>Create</b> (small button left of the touchpad) and <b>Home</b> together until the light bar flashes quickly.
               </li>
               <li>Unplug the cable when Arcadia says it’s connected.</li>
+              <li>
+                <b>Xbox controller:</b> hold the small pair button on top until the Xbox logo flashes fast, then click <b>Connect</b> next to it in System Settings → Bluetooth. Arcadia picks it up by itself.
+              </li>
             </ol>
           )}
           {step === 'searching' && (
@@ -117,6 +120,7 @@ export function PairWizard({ onClose }: { onClose(): void }) {
             <ol className="steps">
               <li>Hold <b>Create</b> + <b>Home</b> until the light bar flashes quickly.</li>
               <li>In System Settings → Bluetooth, click <b>Connect</b> next to “DualSense Wireless Controller”.</li>
+              <li>Xbox controller: hold the pair button on top until the logo flashes fast, then connect “Xbox Wireless Controller” the same way.</li>
               <li>Arcadia will notice it connect.</li>
             </ol>
           )}

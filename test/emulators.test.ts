@@ -330,12 +330,33 @@ describe('Smash Bros. Brawl with four controllers', () => {
     const pads = gcPadIni(p, players);
     expect(pads.get('GCPad4')!.get('Device')).toBe('SDL/0/Xbox Wireless Controller');
     expect(pads.get('GCPad3')!.get('Device')).toBe('SDL/2/DualSense Wireless Controller');
-    expect(pads.get('GCPad4')!.get('Buttons/A')).toBe('`Button S`');
+    // Xbox controllers answer to any of their known names; PS5 controllers keep the plain binding.
+    expect(pads.get('GCPad4')!.get('Buttons/A')).toContain('`SDL/0/Xbox Wireless Controller:Button S`');
+    expect(pads.get('GCPad4')!.get('Buttons/A')).toContain(' | `SDL/0/Xbox Series X Controller:Button S`');
+    expect(pads.get('GCPad1')!.get('Buttons/A')).toBe('`Button S`');
     const core = applyDolphinIni(new Map(), players.length).get('Core')!;
     expect(['SIDevice0', 'SIDevice1', 'SIDevice2', 'SIDevice3'].map((k) => core.get(k))).toEqual(['6', '6', '6', '6']);
     const wm = wiimoteIni(p, players, 'RSBE01');
     expect([1, 2, 3, 4].map((n) => wm.get(`Wiimote${n}`)!.get('Source'))).toEqual(['0', '0', '0', '0']);
     // Other Wii games still get Wii Remotes.
     expect(wiimoteIni(p, players, 'SMNE01').get('Wiimote2')!.get('Source')).toBe('1');
+  });
+});
+
+describe('two Xbox and two PS5 controllers', () => {
+  it('numbers each model separately and gives Xbox players name fallbacks in Wii games', async () => {
+    const { dolphinPlayers, wiimoteIni } = await import('../src/main/emulators/dolphin/config');
+    const { playerOrder } = await import('../src/shared/players');
+    const p = ControllerProfileSchema.parse({});
+    const ds = { name: 'DualSense Wireless Controller' };
+    const xb = { name: 'Xbox Wireless Controller' };
+    const pads = [ds, xb, ds, xb];
+    const players = dolphinPlayers(p, pads);
+    expect(players).toEqual(['SDL/0/DualSense Wireless Controller', 'SDL/0/Xbox Wireless Controller', 'SDL/1/DualSense Wireless Controller', 'SDL/1/Xbox Wireless Controller']);
+    expect(playerOrder(p, pads)).toEqual([0, 1, 2, 3]);
+    const wm = wiimoteIni(p, players, 'SMNE01');
+    expect(wm.get('Wiimote4')!.get('Buttons/A')).toBe('(`SDL/1/Xbox Wireless Controller:Button S` | `SDL/1/Xbox Series X Controller:Button S` | `SDL/1/Xbox One S Controller:Button S` | `SDL/1/Xbox One Controller:Button S` | `SDL/1/Xbox Controller:Button S`)');
+    expect(wm.get('Wiimote3')!.get('Buttons/A')).toBe('`Button S`');
+    expect([1, 2, 3, 4].map((n) => wm.get(`Wiimote${n}`)!.get('Source'))).toEqual(['1', '1', '1', '1']);
   });
 });

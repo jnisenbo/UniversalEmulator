@@ -1,6 +1,7 @@
 import { resolveButton, type PadButton } from '@shared/controls';
 import type { ControllerProfile, Graphics } from '@shared/settings';
 import { setIni, type Ini } from '../../util/ini';
+import { nameCandidates } from '@shared/players';
 
 /**
  * Dolphin input names come from its SDL backend (SDLGamepad.h): buttons are
@@ -52,7 +53,7 @@ export function gcPadIni(p: ControllerProfile, devices: string[] = [p.dolphinDev
       setIni(ini, `GCPad${n}`, { Device: devices[0] ?? p.dolphinDevice });
       continue;
     }
-    setIni(ini, `GCPad${n}`, {
+    setIni(ini, `GCPad${n}`, withFallbacks({
       Device: device,
       'Buttons/A': bind(p, 'south'),
       'Buttons/B': bind(p, 'west'),
@@ -69,7 +70,7 @@ export function gcPadIni(p: ControllerProfile, devices: string[] = [p.dolphinDev
       'Triggers/Threshold': pct(p.triggerThreshold),
       ...dpad('D-Pad', p),
       'Rumble/Motor': rumble(p),
-    });
+    }, device));
   }
   return ini;
 }
@@ -143,7 +144,7 @@ export function wiimoteIni(p: ControllerProfile, devices: string[] = [p.dolphinD
   });
   for (const n of [1, 2, 3, 4]) {
     const device = devices[n - 1];
-    setIni(ini, `Wiimote${n}`, device ? (preset ? preset.build(p, device) : wiimote(device)) : { Source: '0' });
+    setIni(ini, `Wiimote${n}`, device ? withFallbacks(preset ? preset.build(p, device) : wiimote(device), device) : { Source: '0' });
   }
   setIni(ini, 'BalanceBoard', { Source: '0' });
   return ini;
@@ -249,35 +250,27 @@ export function applyGfxIni(ini: Ini, g: Graphics): Ini {
   return ini;
 }
 
-/** Dolphin's SDL device string for a controller name ("Xbox Wireless Controller" etc.). */
-const SDL_NAMES: [RegExp, string][] = [
-  [/dualsense edge/i, 'DualSense Edge Wireless Controller'],
-  [/dualsense/i, 'DualSense Wireless Controller'],
-  [/xbox/i, 'Xbox Wireless Controller'],
-  [/dualshock/i, 'PS4 Controller'],
-];
-export function sdlName(name: string): string {
-  for (const [re, sdl] of SDL_NAMES) if (re.test(name)) return sdl;
-  return name;
-}
+export { dolphinPlayers, sdlName } from '@shared/players';
 
 /**
- * Dolphin device per player, max 4. Dolphin numbers devices per name, so two
- * DualSense controllers are SDL/0/… and SDL/1/…, and an Xbox pad is its own SDL/0/….
- * Player 1 keeps the device chosen in Settings when it is connected.
+ * Xbox and PS5 controllers can reach Dolphin under different names (model,
+ * firmware, connection). A binding that names the wrong device does nothing,
+ * so each control is written as "this button on any of the names this
+ * controller might have": (`SDL/1/Xbox Wireless Controller:Button S` | `SDL/1/Xbox Series X Controller:Button S` | …).
+ * A name that isn't connected simply reads as not pressed.
  */
-export function dolphinPlayers(p: ControllerProfile, controllers: { name: string }[] = []): string[] {
-  if (!p.multiplayer) return [p.dolphinDevice];
-  const manual = p.extraDevices.filter((d) => d.trim());
-  if (manual.length) return [p.dolphinDevice, ...manual].slice(0, 4);
-  const seen = new Map<string, number>();
-  const connected = controllers.map((c) => {
-    const name = sdlName(c.name);
-    const i = seen.get(name) ?? 0;
-    seen.set(name, i + 1);
-    return `SDL/${i}/${name}`;
-  });
-  if (!connected.length) return [p.dolphinDevice];
-  const first = connected.includes(p.dolphinDevice) ? p.dolphinDevice : connected[0]!;
-  return [first, ...connected.filter((d) => d !== first)].slice(0, 4);
+export function withFallbacks(section: Record<string, string>, device: string): Record<string, string> {
+  const m = /^(SDL\/\d+\/)(.+)$/.exec(device);
+  if (!m) return section;
+  // PS5 controllers are confirmed to appear as "DualSense Wireless Controller"; Xbox names vary.
+  if (!/xbox/i.test(m[2]!)) return section;
+  const names = nameCandidates(m[2]!);
+  if (names.length < 2) return section;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(section)) {
+    out[key] = value.includes('`')
+      ? value.replace(/`([^`:]+)`/g, (_all, control: string) => `(${names.map((n) => `\`${m[1]}${n}:${control}\``).join(' | ')})`)
+      : value;
+  }
+  return out;
 }
