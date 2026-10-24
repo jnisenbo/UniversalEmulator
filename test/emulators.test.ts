@@ -319,3 +319,23 @@ describe('Twilight Princess layout', () => {
     expect(wiimoteIni(p, [p.dolphinDevice], 'SMNE01').get('Wiimote1')!.get('Shake/X')).toBe('`Button E`');
   });
 });
+
+describe('Smash Bros. Brawl with four controllers', () => {
+  it('gives each player a GameCube controller and no Wii Remote', async () => {
+    const { applyDolphinIni, dolphinPlayers, gcPadIni, wiimoteIni } = await import('../src/main/emulators/dolphin/config');
+    const p = ControllerProfileSchema.parse({});
+    const ds = { name: 'DualSense Wireless Controller' };
+    const players = dolphinPlayers(p, [ds, ds, ds, { name: 'Xbox Wireless Controller' }]);
+    expect(players).toHaveLength(4);
+    const pads = gcPadIni(p, players);
+    expect(pads.get('GCPad4')!.get('Device')).toBe('SDL/0/Xbox Wireless Controller');
+    expect(pads.get('GCPad3')!.get('Device')).toBe('SDL/2/DualSense Wireless Controller');
+    expect(pads.get('GCPad4')!.get('Buttons/A')).toBe('`Button S`');
+    const core = applyDolphinIni(new Map(), players.length).get('Core')!;
+    expect(['SIDevice0', 'SIDevice1', 'SIDevice2', 'SIDevice3'].map((k) => core.get(k))).toEqual(['6', '6', '6', '6']);
+    const wm = wiimoteIni(p, players, 'RSBE01');
+    expect([1, 2, 3, 4].map((n) => wm.get(`Wiimote${n}`)!.get('Source'))).toEqual(['0', '0', '0', '0']);
+    // Other Wii games still get Wii Remotes.
+    expect(wiimoteIni(p, players, 'SMNE01').get('Wiimote2')!.get('Source')).toBe('1');
+  });
+});

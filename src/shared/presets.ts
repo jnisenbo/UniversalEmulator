@@ -20,5 +20,13 @@ export const WII_PRESET_INFO: Record<string, PresetInfo> = {
   },
 };
 
+const GAMECUBE_CONTROLS = [
+  'Plays with GameCube controls, one controller per player (up to 4)',
+  'Cross: A · Square: B · Circle: X · Triangle: Y · R1: Z',
+  'L2 / R2: L / R (shield) · Right stick: C-stick · Options: Start',
+];
+WII_PRESET_INFO.RSB = { name: 'Smash Bros. Brawl', controls: GAMECUBE_CONTROLS };
+WII_PRESET_INFO.RMC = { name: 'Mario Kart Wii', controls: GAMECUBE_CONTROLS };
+
 export const presetFor = (platform: string, gameId: string | null | undefined): PresetInfo | undefined =>
   platform === 'wii' && gameId ? WII_PRESET_INFO[gameId.slice(0, 3).toUpperCase()] : undefined;

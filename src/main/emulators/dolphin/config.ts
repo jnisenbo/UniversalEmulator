@@ -79,8 +79,21 @@ export function gcPadIni(p: ControllerProfile, devices: string[] = [p.dolphinDev
  * controller gyro/accelerometer drive Wii motion. Home is on the touchpad
  * because the controller's Home button opens Arcadia's in-game menu.
  */
+/**
+ * Wii games that play best with GameCube controllers (Smash Bros. Brawl,
+ * Mario Kart Wii). Each controller is only a GameCube pad there: with a Wii
+ * Remote as well, every person would join twice at character select.
+ */
+export const GAMECUBE_PAD_WII_GAMES = new Set(['RSB', 'RMC']);
+export const usesGameCubePads = (gameId?: string | null): boolean => !!gameId && GAMECUBE_PAD_WII_GAMES.has(gameId.slice(0, 3).toUpperCase());
+
 export function wiimoteIni(p: ControllerProfile, devices: string[] = [p.dolphinDevice], gameId?: string | null): Ini {
   const ini: Ini = new Map();
+  if (usesGameCubePads(gameId)) {
+    for (const n of [1, 2, 3, 4]) setIni(ini, `Wiimote${n}`, { Source: '0' });
+    setIni(ini, 'BalanceBoard', { Source: '0' });
+    return ini;
+  }
   const preset = gameId ? WII_PRESETS[gameId.slice(0, 3).toUpperCase()] : undefined;
   const motion: Record<string, string> = p.motion
     ? {
