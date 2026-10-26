@@ -370,3 +370,21 @@ describe('bringing an emulator forward', () => {
     expect(listsBundle(list, '/Applications/Xenia-edge.app')).toBe(false);
   });
 });
+
+describe('custom emulators that are Mac apps (Astris)', () => {
+  it('opens the game like Finder by default, and can use launch options instead', async () => {
+    const { customAdapter, OPEN_AND_WAIT_SCRIPT } = await import('../src/main/emulators/custom');
+    const { SettingsSchema } = await import('../src/shared/settings');
+    const s = SettingsSchema.parse({ customEmulators: { switch: { appPath: '/Applications/Astris.app' } } });
+    const c = s.customEmulators.switch!;
+    expect(c.launch).toBe('open');
+    const app = { installPath: c.appPath, executable: '/Applications/Astris.app/Contents/MacOS/Astris', version: null, bundleId: null, arch: [] };
+    const game = { path: '/ROMS/Mario Kart 8 Deluxe.nsp' } as never;
+    const open = customAdapter('switch', c).getLaunchArgs(game, app, {} as never);
+    expect(open).toMatchObject({ executable: '/bin/sh', env: { ARCADIA_APP: '/Applications/Astris.app', ARCADIA_GAME: '/ROMS/Mario Kart 8 Deluxe.nsp' } });
+    expect(OPEN_AND_WAIT_SCRIPT).toContain('open -W -a "$ARCADIA_APP" "$ARCADIA_GAME"');
+    expect(OPEN_AND_WAIT_SCRIPT).not.toContain('Astris');
+    const args = customAdapter('switch', { ...c, launch: 'args', argsTemplate: '-f {game}' }).getLaunchArgs(game, app, {} as never);
+    expect(args).toEqual({ executable: app.executable, args: ['-f', '/ROMS/Mario Kart 8 Deluxe.nsp'] });
+  });
+});

@@ -83,7 +83,7 @@ export function Settings() {
       const path = await api.invoke('dialog:pick', { kind: 'app', title: `Choose the emulator for ${PLATFORM_INFO[platform].label}` });
       if (!path) return;
       const current = useStore.getState().settings?.customEmulators ?? {};
-      await updateSettings({ customEmulators: { ...current, [platform]: { appPath: path, name: '', argsTemplate: current[platform]?.argsTemplate ?? '{game}' } } });
+      await updateSettings({ customEmulators: { ...current, [platform]: { appPath: path, name: '', argsTemplate: current[platform]?.argsTemplate ?? '{game}', launch: current[platform]?.launch ?? 'open' } } });
       toast({ level: 'info', title: `${PLATFORM_INFO[platform].label} games now open in ${shortPath(path).split('/').pop()?.replace(/\.app$/, '')}`, detail: 'If it needs extra options to start a game, edit its launch options in Settings → Emulators.' });
     },
     [updateSettings, toast],
@@ -167,6 +167,7 @@ export function Settings() {
             }),
           autodetect: () => void autodetect(),
           openCustom: () => setModal({ kind: 'custom' }),
+          setCustomLaunch: (p, launch) => void updateSettings({ customEmulators: { ...settings.customEmulators, [p]: { ...settings.customEmulators[p]!, launch } } }),
           setCustomArgs: (p, args) => void updateSettings({ customEmulators: { ...settings.customEmulators, [p]: { ...settings.customEmulators[p]!, argsTemplate: args } } }),
           removeCustom: (p) => {
             const next = { ...settings.customEmulators };

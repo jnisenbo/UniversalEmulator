@@ -85,7 +85,17 @@ export const SettingsSchema = z.object({
   customEmulators: z
     .partialRecord(
       z.enum(PLATFORMS),
-      z.object({ appPath: z.string(), name: z.string().default(''), argsTemplate: z.string().default('{game}') }),
+      z.object({
+        appPath: z.string(),
+        name: z.string().default(''),
+        argsTemplate: z.string().default('{game}'),
+        /**
+         * open: hand the game over like Finder does ("open this file"), which
+         * native Mac apps such as Astris expect. args: start the app with the
+         * argument template, for command-line emulators.
+         */
+        launch: z.enum(['open', 'args']).default('open'),
+      }),
     )
     .default({}),
   /** Your own prod.keys, read-only, used to identify Switch dumps. Never copied. */

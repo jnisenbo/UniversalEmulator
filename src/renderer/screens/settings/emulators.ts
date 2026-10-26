@@ -34,6 +34,7 @@ export function emulatorRows(opts: {
   autodetect(): void;
   openCustom(): void;
   setCustomArgs(platform: Platform, args: string): void;
+  setCustomLaunch(platform: Platform, launch: 'open' | 'args'): void;
   removeCustom(platform: Platform): void;
 }): Row[] {
   const { settings, statuses, installs, progress } = opts;
@@ -106,9 +107,18 @@ export function emulatorRows(opts: {
     if (!c) continue;
     const name = shortPath(c.appPath).split('/').pop()!.replace(/\.app$/i, '');
     rows.push({
+      kind: 'choice',
+      id: `custom-${p}-launch`,
+      label: `${PLATFORM_INFO[p].label}: ${name}`,
+      detail: c.launch === 'open' ? 'Opens the game the way Finder does. Right for Mac apps like Astris.' : 'Starts the app with the launch options below. For command line emulators.',
+      options: [{ label: 'Open like Finder' }, { label: 'Launch options' }],
+      index: c.launch === 'args' ? 1 : 0,
+      onChange: (i) => opts.setCustomLaunch(p, i === 1 ? 'args' : 'open'),
+    });
+    if (c.launch === 'args') rows.push({
       kind: 'text',
       id: `custom-${p}`,
-      label: `${PLATFORM_INFO[p].label}: ${name}`,
+      label: 'Launch options',
       detail: 'Launch options. {game} is replaced by the game file. Example: {game} --fullscreen',
       value: c.argsTemplate,
       onCommit: (v) => opts.setCustomArgs(p, v.trim() || '{game}'),
