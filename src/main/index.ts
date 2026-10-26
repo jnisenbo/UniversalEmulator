@@ -182,10 +182,14 @@ function backUpSaves(only?: RunnerId): Promise<BackupResult> {
  * hand focus to the emulator so its window isn't hidden behind the launcher.
  */
 function bringEmulatorForward(): void {
-  setTimeout(() => {
-    if (session.current.kind !== 'running' || !currentAdapter || !win || win.isDestroyed() || !win.isFocused()) return;
-    void activateApp(currentAdapter.installPath(settings.get()));
-  }, 1500);
+  // Some emulators (Ryujinx-based ones like Astris) take a few seconds to open a
+  // window, so check a few times. activateApp never starts a second copy.
+  for (const delay of [1500, 4000, 8000]) {
+    setTimeout(() => {
+      if (session.current.kind !== 'running' || !currentAdapter || !win || win.isDestroyed() || !win.isFocused()) return;
+      void activateApp(currentAdapter.installPath(settings.get()));
+    }, delay);
+  }
 }
 
 function switchKeysPath(s: Settings): string {

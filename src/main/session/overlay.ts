@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen } from 'electron';
 import { join } from 'node:path';
 import { run } from '../util/exec';
+import { isRegisteredRunning } from '../platform/macos/running';
 
 /**
  * The in-game menu: a transparent, always-on-top window that can float over
@@ -76,8 +77,14 @@ export class OverlayWindow {
   }
 }
 
-/** Give focus back to the emulator after Resume. `open` on a running app activates it. */
+/**
+ * Bring the emulator to the front. `open` on an app macOS already knows is
+ * running just activates it, but on one it doesn't know yet (an emulator
+ * Arcadia started moments ago, still loading) it starts a second copy with no
+ * game. So only activate an app that LaunchServices lists as running.
+ */
 export async function activateApp(installPath: string | null): Promise<void> {
   if (process.platform !== 'darwin' || !installPath?.endsWith('.app')) return;
+  if (!(await isRegisteredRunning(installPath))) return;
   await run('/usr/bin/open', [installPath]);
 }

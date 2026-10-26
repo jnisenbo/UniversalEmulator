@@ -360,3 +360,13 @@ describe('two Xbox and two PS5 controllers', () => {
     expect([1, 2, 3, 4].map((n) => wm.get(`Wiimote${n}`)!.get('Source'))).toEqual(['1', '1', '1', '1']);
   });
 });
+
+describe('bringing an emulator forward', () => {
+  it('only treats an app as running when LaunchServices lists its bundle', async () => {
+    const { listsBundle } = await import('../src/main/platform/macos/running');
+    const list = ' 12) "Astris" ASN:0x0-0x5e05e:\n    bundleID="com.astris.app"\n    bundle path="/Applications/Astris.app"\n';
+    expect(listsBundle(list, '/Applications/Astris.app')).toBe(true);
+    expect(listsBundle(list, '/Applications/Astris.app/')).toBe(true);
+    expect(listsBundle(list, '/Applications/Xenia-edge.app')).toBe(false);
+  });
+});
