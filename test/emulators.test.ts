@@ -310,6 +310,10 @@ describe('Twilight Princess layout', () => {
     expect(tp.get('Nunchuk/Swing/Forward')).toBe('`Button N`'); // Triangle: shield attack
     expect(tp.get('Nunchuk/Buttons/Z')).toBe('`Trigger L`');
     expect(tp.get('IR/Recenter')).toBe('`Thumb R`');
+    // Fishing: right stick tilts the remote (raise rod, wiggle lure) and the Nunchuk (reel); Square also throws.
+    expect(tp.get('Tilt/Backward')).toBe('`Right Y+`');
+    expect(tp.get('Nunchuk/Tilt/Left')).toBe('`Right X-`');
+    expect(tp.get('Swing/Forward')).toBe('`Button W`');
     expect(tp.get('Swing/Speed')).toBe('40');
     expect(tp.get('Nunchuk/Swing/Speed')).toBe('40');
     expect(tp.get('Nunchuk/Shake/Frequency')).toBe('12');

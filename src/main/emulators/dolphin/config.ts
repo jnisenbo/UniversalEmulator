@@ -196,7 +196,16 @@ const TWILIGHT_PRINCESS: WiiPreset = {
     // The game reads a sword attack from a Wii Remote swing, not a shake (a shake does nothing),
     // so Square swings sideways; the shake stays as a backup.
     'Swing/Right': bind(p, 'west'),
+    // Forward as well, so the same button throws the line when fishing (hold Cross, press Square).
+    'Swing/Forward': bind(p, 'west'),
     ...shake('Shake', bind(p, 'west')),
+    // Fishing: the right stick also tilts the Wii Remote (up raises the rod to hook a fish,
+    // moving it wiggles the lure) and the Nunchuk (circling it turns the reel).
+    // Tilt Backward points the remote up, matching the aim moving up.
+    'Tilt/Forward': q('Right Y-'),
+    'Tilt/Backward': q('Right Y+'),
+    'Tilt/Left': q('Right X-'),
+    'Tilt/Right': q('Right X+'),
     // Dolphin plays a button-driven motion at a set speed; at its defaults a quick
     // tap ends before the game sees a swing. Fastest swing, quicker return and a
     // faster shake make a single tap count.
@@ -207,6 +216,10 @@ const TWILIGHT_PRINCESS: WiiPreset = {
     ...stick('Nunchuk/Stick', 'Left', p.deadzoneLeft),
     ...shake('Nunchuk/Shake', bind(p, 'east')),
     'Nunchuk/Swing/Forward': bind(p, 'north'),
+    'Nunchuk/Tilt/Forward': q('Right Y-'),
+    'Nunchuk/Tilt/Backward': q('Right Y+'),
+    'Nunchuk/Tilt/Left': q('Right X-'),
+    'Nunchuk/Tilt/Right': q('Right X+'),
     ...FAST_MOTION('Nunchuk/Swing', 'Nunchuk/Shake'),
     'Rumble/Motor': rumble(p),
   }),
